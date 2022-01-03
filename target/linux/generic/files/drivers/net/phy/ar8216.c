@@ -23,14 +23,12 @@
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 #include <linux/netlink.h>
-#include <linux/of_device.h>
-#include <linux/of_mdio.h>
-#include <linux/of_net.h>
 #include <linux/bitops.h>
 #include <net/genetlink.h>
 #include <linux/switch.h>
 #include <linux/delay.h>
 #include <linux/phy.h>
+#include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/lockdep.h>
 #include <linux/ar8216_platform.h>
@@ -42,111 +40,99 @@
 extern const struct ar8xxx_chip ar8327_chip;
 extern const struct ar8xxx_chip ar8337_chip;
 
-#define MIB_DESC_BASIC(_s , _o, _n)		\
-	{					\
-		.size = (_s),			\
-		.offset = (_o),			\
-		.name = (_n),			\
-		.type = AR8XXX_MIB_BASIC,	\
-	}
+#define AR8XXX_MIB_WORK_DELAY	2000 /* msecs */
 
-#define MIB_DESC_EXT(_s , _o, _n)		\
-	{					\
-		.size = (_s),			\
-		.offset = (_o),			\
-		.name = (_n),			\
-		.type = AR8XXX_MIB_EXTENDED,	\
+#define MIB_DESC(_s , _o, _n)	\
+	{			\
+		.size = (_s),	\
+		.offset = (_o),	\
+		.name = (_n),	\
 	}
 
 static const struct ar8xxx_mib_desc ar8216_mibs[] = {
-	MIB_DESC_EXT(1, AR8216_STATS_RXBROAD, "RxBroad"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXPAUSE, "RxPause"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXMULTI, "RxMulti"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXFCSERR, "RxFcsErr"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXALIGNERR, "RxAlignErr"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXRUNT, "RxRunt"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXFRAGMENT, "RxFragment"),
-	MIB_DESC_EXT(1, AR8216_STATS_RX64BYTE, "Rx64Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RX128BYTE, "Rx128Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RX256BYTE, "Rx256Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RX512BYTE, "Rx512Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RX1024BYTE, "Rx1024Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXMAXBYTE, "RxMaxByte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXTOOLONG, "RxTooLong"),
-	MIB_DESC_BASIC(2, AR8216_STATS_RXGOODBYTE, "RxGoodByte"),
-	MIB_DESC_EXT(2, AR8216_STATS_RXBADBYTE, "RxBadByte"),
-	MIB_DESC_EXT(1, AR8216_STATS_RXOVERFLOW, "RxOverFlow"),
-	MIB_DESC_EXT(1, AR8216_STATS_FILTERED, "Filtered"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXBROAD, "TxBroad"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXPAUSE, "TxPause"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXMULTI, "TxMulti"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXUNDERRUN, "TxUnderRun"),
-	MIB_DESC_EXT(1, AR8216_STATS_TX64BYTE, "Tx64Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TX128BYTE, "Tx128Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TX256BYTE, "Tx256Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TX512BYTE, "Tx512Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TX1024BYTE, "Tx1024Byte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXMAXBYTE, "TxMaxByte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXOVERSIZE, "TxOverSize"),
-	MIB_DESC_BASIC(2, AR8216_STATS_TXBYTE, "TxByte"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXCOLLISION, "TxCollision"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXABORTCOL, "TxAbortCol"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXMULTICOL, "TxMultiCol"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXSINGLECOL, "TxSingleCol"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXEXCDEFER, "TxExcDefer"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXDEFER, "TxDefer"),
-	MIB_DESC_EXT(1, AR8216_STATS_TXLATECOL, "TxLateCol"),
+	MIB_DESC(1, AR8216_STATS_RXBROAD, "RxBroad"),
+	MIB_DESC(1, AR8216_STATS_RXPAUSE, "RxPause"),
+	MIB_DESC(1, AR8216_STATS_RXMULTI, "RxMulti"),
+	MIB_DESC(1, AR8216_STATS_RXFCSERR, "RxFcsErr"),
+	MIB_DESC(1, AR8216_STATS_RXALIGNERR, "RxAlignErr"),
+	MIB_DESC(1, AR8216_STATS_RXRUNT, "RxRunt"),
+	MIB_DESC(1, AR8216_STATS_RXFRAGMENT, "RxFragment"),
+	MIB_DESC(1, AR8216_STATS_RX64BYTE, "Rx64Byte"),
+	MIB_DESC(1, AR8216_STATS_RX128BYTE, "Rx128Byte"),
+	MIB_DESC(1, AR8216_STATS_RX256BYTE, "Rx256Byte"),
+	MIB_DESC(1, AR8216_STATS_RX512BYTE, "Rx512Byte"),
+	MIB_DESC(1, AR8216_STATS_RX1024BYTE, "Rx1024Byte"),
+	MIB_DESC(1, AR8216_STATS_RXMAXBYTE, "RxMaxByte"),
+	MIB_DESC(1, AR8216_STATS_RXTOOLONG, "RxTooLong"),
+	MIB_DESC(2, AR8216_STATS_RXGOODBYTE, "RxGoodByte"),
+	MIB_DESC(2, AR8216_STATS_RXBADBYTE, "RxBadByte"),
+	MIB_DESC(1, AR8216_STATS_RXOVERFLOW, "RxOverFlow"),
+	MIB_DESC(1, AR8216_STATS_FILTERED, "Filtered"),
+	MIB_DESC(1, AR8216_STATS_TXBROAD, "TxBroad"),
+	MIB_DESC(1, AR8216_STATS_TXPAUSE, "TxPause"),
+	MIB_DESC(1, AR8216_STATS_TXMULTI, "TxMulti"),
+	MIB_DESC(1, AR8216_STATS_TXUNDERRUN, "TxUnderRun"),
+	MIB_DESC(1, AR8216_STATS_TX64BYTE, "Tx64Byte"),
+	MIB_DESC(1, AR8216_STATS_TX128BYTE, "Tx128Byte"),
+	MIB_DESC(1, AR8216_STATS_TX256BYTE, "Tx256Byte"),
+	MIB_DESC(1, AR8216_STATS_TX512BYTE, "Tx512Byte"),
+	MIB_DESC(1, AR8216_STATS_TX1024BYTE, "Tx1024Byte"),
+	MIB_DESC(1, AR8216_STATS_TXMAXBYTE, "TxMaxByte"),
+	MIB_DESC(1, AR8216_STATS_TXOVERSIZE, "TxOverSize"),
+	MIB_DESC(2, AR8216_STATS_TXBYTE, "TxByte"),
+	MIB_DESC(1, AR8216_STATS_TXCOLLISION, "TxCollision"),
+	MIB_DESC(1, AR8216_STATS_TXABORTCOL, "TxAbortCol"),
+	MIB_DESC(1, AR8216_STATS_TXMULTICOL, "TxMultiCol"),
+	MIB_DESC(1, AR8216_STATS_TXSINGLECOL, "TxSingleCol"),
+	MIB_DESC(1, AR8216_STATS_TXEXCDEFER, "TxExcDefer"),
+	MIB_DESC(1, AR8216_STATS_TXDEFER, "TxDefer"),
+	MIB_DESC(1, AR8216_STATS_TXLATECOL, "TxLateCol"),
 };
 
 const struct ar8xxx_mib_desc ar8236_mibs[39] = {
-	MIB_DESC_EXT(1, AR8236_STATS_RXBROAD, "RxBroad"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXPAUSE, "RxPause"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXMULTI, "RxMulti"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXFCSERR, "RxFcsErr"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXALIGNERR, "RxAlignErr"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXRUNT, "RxRunt"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXFRAGMENT, "RxFragment"),
-	MIB_DESC_EXT(1, AR8236_STATS_RX64BYTE, "Rx64Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RX128BYTE, "Rx128Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RX256BYTE, "Rx256Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RX512BYTE, "Rx512Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RX1024BYTE, "Rx1024Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RX1518BYTE, "Rx1518Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXMAXBYTE, "RxMaxByte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXTOOLONG, "RxTooLong"),
-	MIB_DESC_BASIC(2, AR8236_STATS_RXGOODBYTE, "RxGoodByte"),
-	MIB_DESC_EXT(2, AR8236_STATS_RXBADBYTE, "RxBadByte"),
-	MIB_DESC_EXT(1, AR8236_STATS_RXOVERFLOW, "RxOverFlow"),
-	MIB_DESC_EXT(1, AR8236_STATS_FILTERED, "Filtered"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXBROAD, "TxBroad"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXPAUSE, "TxPause"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXMULTI, "TxMulti"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXUNDERRUN, "TxUnderRun"),
-	MIB_DESC_EXT(1, AR8236_STATS_TX64BYTE, "Tx64Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TX128BYTE, "Tx128Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TX256BYTE, "Tx256Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TX512BYTE, "Tx512Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TX1024BYTE, "Tx1024Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TX1518BYTE, "Tx1518Byte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXMAXBYTE, "TxMaxByte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXOVERSIZE, "TxOverSize"),
-	MIB_DESC_BASIC(2, AR8236_STATS_TXBYTE, "TxByte"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXCOLLISION, "TxCollision"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXABORTCOL, "TxAbortCol"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXMULTICOL, "TxMultiCol"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXSINGLECOL, "TxSingleCol"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXEXCDEFER, "TxExcDefer"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXDEFER, "TxDefer"),
-	MIB_DESC_EXT(1, AR8236_STATS_TXLATECOL, "TxLateCol"),
+	MIB_DESC(1, AR8236_STATS_RXBROAD, "RxBroad"),
+	MIB_DESC(1, AR8236_STATS_RXPAUSE, "RxPause"),
+	MIB_DESC(1, AR8236_STATS_RXMULTI, "RxMulti"),
+	MIB_DESC(1, AR8236_STATS_RXFCSERR, "RxFcsErr"),
+	MIB_DESC(1, AR8236_STATS_RXALIGNERR, "RxAlignErr"),
+	MIB_DESC(1, AR8236_STATS_RXRUNT, "RxRunt"),
+	MIB_DESC(1, AR8236_STATS_RXFRAGMENT, "RxFragment"),
+	MIB_DESC(1, AR8236_STATS_RX64BYTE, "Rx64Byte"),
+	MIB_DESC(1, AR8236_STATS_RX128BYTE, "Rx128Byte"),
+	MIB_DESC(1, AR8236_STATS_RX256BYTE, "Rx256Byte"),
+	MIB_DESC(1, AR8236_STATS_RX512BYTE, "Rx512Byte"),
+	MIB_DESC(1, AR8236_STATS_RX1024BYTE, "Rx1024Byte"),
+	MIB_DESC(1, AR8236_STATS_RX1518BYTE, "Rx1518Byte"),
+	MIB_DESC(1, AR8236_STATS_RXMAXBYTE, "RxMaxByte"),
+	MIB_DESC(1, AR8236_STATS_RXTOOLONG, "RxTooLong"),
+	MIB_DESC(2, AR8236_STATS_RXGOODBYTE, "RxGoodByte"),
+	MIB_DESC(2, AR8236_STATS_RXBADBYTE, "RxBadByte"),
+	MIB_DESC(1, AR8236_STATS_RXOVERFLOW, "RxOverFlow"),
+	MIB_DESC(1, AR8236_STATS_FILTERED, "Filtered"),
+	MIB_DESC(1, AR8236_STATS_TXBROAD, "TxBroad"),
+	MIB_DESC(1, AR8236_STATS_TXPAUSE, "TxPause"),
+	MIB_DESC(1, AR8236_STATS_TXMULTI, "TxMulti"),
+	MIB_DESC(1, AR8236_STATS_TXUNDERRUN, "TxUnderRun"),
+	MIB_DESC(1, AR8236_STATS_TX64BYTE, "Tx64Byte"),
+	MIB_DESC(1, AR8236_STATS_TX128BYTE, "Tx128Byte"),
+	MIB_DESC(1, AR8236_STATS_TX256BYTE, "Tx256Byte"),
+	MIB_DESC(1, AR8236_STATS_TX512BYTE, "Tx512Byte"),
+	MIB_DESC(1, AR8236_STATS_TX1024BYTE, "Tx1024Byte"),
+	MIB_DESC(1, AR8236_STATS_TX1518BYTE, "Tx1518Byte"),
+	MIB_DESC(1, AR8236_STATS_TXMAXBYTE, "TxMaxByte"),
+	MIB_DESC(1, AR8236_STATS_TXOVERSIZE, "TxOverSize"),
+	MIB_DESC(2, AR8236_STATS_TXBYTE, "TxByte"),
+	MIB_DESC(1, AR8236_STATS_TXCOLLISION, "TxCollision"),
+	MIB_DESC(1, AR8236_STATS_TXABORTCOL, "TxAbortCol"),
+	MIB_DESC(1, AR8236_STATS_TXMULTICOL, "TxMultiCol"),
+	MIB_DESC(1, AR8236_STATS_TXSINGLECOL, "TxSingleCol"),
+	MIB_DESC(1, AR8236_STATS_TXEXCDEFER, "TxExcDefer"),
+	MIB_DESC(1, AR8236_STATS_TXDEFER, "TxDefer"),
+	MIB_DESC(1, AR8236_STATS_TXLATECOL, "TxLateCol"),
 };
 
 static DEFINE_MUTEX(ar8xxx_dev_list_lock);
 static LIST_HEAD(ar8xxx_dev_list);
-
-static void
-ar8xxx_mib_start(struct ar8xxx_priv *priv);
-static void
-ar8xxx_mib_stop(struct ar8xxx_priv *priv);
 
 /* inspired by phy_poll_reset in drivers/net/phy/phy_device.c */
 static int
@@ -202,7 +188,7 @@ ar8xxx_phy_init(struct ar8xxx_priv *priv)
 	int i;
 	struct mii_bus *bus;
 
-	bus = priv->sw_mii_bus ?: priv->mii_bus;
+	bus = priv->mii_bus;
 	for (i = 0; i < AR8XXX_NUM_PHYS; i++) {
 		if (priv->chip->phy_fixup)
 			priv->chip->phy_fixup(priv, i);
@@ -308,17 +294,6 @@ ar8xxx_rmw(struct ar8xxx_priv *priv, int reg, u32 mask, u32 val)
 	mutex_unlock(&bus->mdio_lock);
 
 	return ret;
-}
-void
-ar8xxx_phy_dbg_read(struct ar8xxx_priv *priv, int phy_addr,
-           u16 dbg_addr, u16 *dbg_data)
-{
-       struct mii_bus *bus = priv->mii_bus;
-
-       mutex_lock(&bus->mdio_lock);
-       bus->write(bus, phy_addr, MII_ATH_DBG_ADDR, dbg_addr);
-       *dbg_data = bus->read(bus, phy_addr, MII_ATH_DBG_DATA);
-       mutex_unlock(&bus->mdio_lock);
 }
 
 void
@@ -440,8 +415,6 @@ ar8xxx_mib_fetch_port_stat(struct ar8xxx_priv *priv, int port, bool flush)
 		u64 t;
 
 		mib = &priv->chip->mib_decs[i];
-		if (mib->type > priv->mib_type)
-			continue;
 		t = ar8xxx_read(priv, base + mib->offset);
 		if (mib->size == 2) {
 			u64 hi;
@@ -667,8 +640,7 @@ ar8216_read_port_status(struct ar8xxx_priv *priv, int port)
 }
 
 static void
-__ar8216_setup_port(struct ar8xxx_priv *priv, int port, u32 members,
-		    bool ath_hdr_en)
+ar8216_setup_port(struct ar8xxx_priv *priv, int port, u32 members)
 {
 	u32 header;
 	u32 egress, ingress;
@@ -687,7 +659,10 @@ __ar8216_setup_port(struct ar8xxx_priv *priv, int port, u32 members,
 		ingress = AR8216_IN_PORT_ONLY;
 	}
 
-	header = ath_hdr_en ? AR8216_PORT_CTRL_HEADER : 0;
+	if (chip_is_ar8216(priv) && priv->vlan && port == AR8216_PORT_CPU)
+		header = AR8216_PORT_CTRL_HEADER;
+	else
+		header = 0;
 
 	ar8xxx_rmw(priv, AR8216_REG_PORT_CTRL(port),
 		   AR8216_PORT_CTRL_LEARN | AR8216_PORT_CTRL_VLAN_MODE |
@@ -705,22 +680,11 @@ __ar8216_setup_port(struct ar8xxx_priv *priv, int port, u32 members,
 		   (pvid << AR8216_PORT_VLAN_DEFAULT_ID_S));
 }
 
-static void
-ar8216_setup_port(struct ar8xxx_priv *priv, int port, u32 members)
-{
-	return __ar8216_setup_port(priv, port, members,
-				   chip_is_ar8216(priv) && priv->vlan &&
-				   port == AR8216_PORT_CPU);
-}
-
 static int
 ar8216_hw_init(struct ar8xxx_priv *priv)
 {
 	if (priv->initialized)
 		return 0;
-
-	ar8xxx_write(priv, AR8216_REG_CTRL, AR8216_CTRL_RESET);
-	ar8xxx_reg_wait(priv, AR8216_REG_CTRL, AR8216_CTRL_RESET, 0, 1000);
 
 	ar8xxx_phy_init(priv);
 
@@ -739,8 +703,7 @@ ar8216_init_globals(struct ar8xxx_priv *priv)
 }
 
 static void
-__ar8216_init_port(struct ar8xxx_priv *priv, int port,
-		   bool cpu_ge, bool flow_en)
+ar8216_init_port(struct ar8xxx_priv *priv, int port)
 {
 	/* Enable port learning and tx */
 	ar8xxx_write(priv, AR8216_REG_PORT_CTRL(port),
@@ -752,23 +715,17 @@ __ar8216_init_port(struct ar8xxx_priv *priv, int port,
 	if (port == AR8216_PORT_CPU) {
 		ar8xxx_write(priv, AR8216_REG_PORT_STATUS(port),
 			AR8216_PORT_STATUS_LINK_UP |
-			(cpu_ge ? AR8216_PORT_SPEED_1000M : AR8216_PORT_SPEED_100M) |
+			(ar8xxx_has_gige(priv) ?
+                                AR8216_PORT_SPEED_1000M : AR8216_PORT_SPEED_100M) |
 			AR8216_PORT_STATUS_TXMAC |
 			AR8216_PORT_STATUS_RXMAC |
-			(flow_en ? AR8216_PORT_STATUS_RXFLOW : 0) |
-			(flow_en ? AR8216_PORT_STATUS_TXFLOW : 0) |
+			(chip_is_ar8316(priv) ? AR8216_PORT_STATUS_RXFLOW : 0) |
+			(chip_is_ar8316(priv) ? AR8216_PORT_STATUS_TXFLOW : 0) |
 			AR8216_PORT_STATUS_DUPLEX);
 	} else {
 		ar8xxx_write(priv, AR8216_REG_PORT_STATUS(port),
 			AR8216_PORT_STATUS_LINK_AUTO);
 	}
-}
-
-static void
-ar8216_init_port(struct ar8xxx_priv *priv, int port)
-{
-	__ar8216_init_port(priv, port, ar8xxx_has_gige(priv),
-			   chip_is_ar8316(priv));
 }
 
 static void
@@ -792,6 +749,7 @@ static void ar8216_get_arl_entry(struct ar8xxx_priv *priv,
 	u16 r2, page;
 	u16 r1_func0, r1_func1, r1_func2;
 	u32 t, val0, val1, val2;
+	int i;
 
 	split_addr(AR8216_REG_ATU_FUNC0, &r1_func0, &r2, &page);
 	r2 |= 0x10;
@@ -827,7 +785,12 @@ static void ar8216_get_arl_entry(struct ar8xxx_priv *priv,
 		if (!*status)
 			break;
 
-		a->portmap = (val2 & AR8216_ATU_PORTS) >> AR8216_ATU_PORTS_S;
+		i = 0;
+		t = AR8216_ATU_PORT0;
+		while (!(val2 & t) && ++i < priv->dev.ports)
+			t <<= 1;
+
+		a->port = i;
 		a->mac[0] = (val0 & AR8216_ATU_ADDR5) >> AR8216_ATU_ADDR5_S;
 		a->mac[1] = (val0 & AR8216_ATU_ADDR4) >> AR8216_ATU_ADDR4_S;
 		a->mac[2] = (val1 & AR8216_ATU_ADDR3) >> AR8216_ATU_ADDR3_S;
@@ -836,197 +799,6 @@ static void ar8216_get_arl_entry(struct ar8xxx_priv *priv,
 		a->mac[5] = (val1 & AR8216_ATU_ADDR0) >> AR8216_ATU_ADDR0_S;
 		break;
 	}
-}
-
-static int
-ar8216_phy_read(struct ar8xxx_priv *priv, int addr, int regnum)
-{
-	u32 t, val = 0xffff;
-	int err;
-
-	if (addr >= AR8216_NUM_PORTS)
-		return 0xffff;
-	t = (regnum << AR8216_MDIO_CTRL_REG_ADDR_S) |
-	    (addr << AR8216_MDIO_CTRL_PHY_ADDR_S) |
-	    AR8216_MDIO_CTRL_MASTER_EN |
-	    AR8216_MDIO_CTRL_BUSY |
-	    AR8216_MDIO_CTRL_CMD_READ;
-
-	ar8xxx_write(priv, AR8216_REG_MDIO_CTRL, t);
-	err = ar8xxx_reg_wait(priv, AR8216_REG_MDIO_CTRL,
-			      AR8216_MDIO_CTRL_BUSY, 0, 5);
-	if (!err)
-		val = ar8xxx_read(priv, AR8216_REG_MDIO_CTRL);
-
-	return val & AR8216_MDIO_CTRL_DATA_M;
-}
-
-static int
-ar8216_phy_write(struct ar8xxx_priv *priv, int addr, int regnum, u16 val)
-{
-	u32 t;
-	int ret;
-
-	if (addr >= AR8216_NUM_PORTS)
-		return -EINVAL;
-
-	t = (addr << AR8216_MDIO_CTRL_PHY_ADDR_S) |
-	    (regnum << AR8216_MDIO_CTRL_REG_ADDR_S) |
-	    AR8216_MDIO_CTRL_MASTER_EN |
-	    AR8216_MDIO_CTRL_BUSY |
-	    AR8216_MDIO_CTRL_CMD_WRITE |
-	    val;
-
-	ar8xxx_write(priv, AR8216_REG_MDIO_CTRL, t);
-	ret = ar8xxx_reg_wait(priv, AR8216_REG_MDIO_CTRL,
-			      AR8216_MDIO_CTRL_BUSY, 0, 5);
-
-	return ret;
-}
-
-static int
-ar8229_hw_init(struct ar8xxx_priv *priv)
-{
-	int phy_if_mode;
-
-	if (priv->initialized)
-		return 0;
-
-	ar8xxx_write(priv, AR8216_REG_CTRL, AR8216_CTRL_RESET);
-	ar8xxx_reg_wait(priv, AR8216_REG_CTRL, AR8216_CTRL_RESET, 0, 1000);
-
-	phy_if_mode = of_get_phy_mode(priv->pdev->of_node);
-
-	if (phy_if_mode == PHY_INTERFACE_MODE_GMII) {
-		ar8xxx_write(priv, AR8229_REG_OPER_MODE0,
-				 AR8229_OPER_MODE0_MAC_GMII_EN);
-	} else if (phy_if_mode == PHY_INTERFACE_MODE_MII) {
-		ar8xxx_write(priv, AR8229_REG_OPER_MODE0,
-				 AR8229_OPER_MODE0_PHY_MII_EN);
-	} else {
-		pr_err("ar8229: unsupported mii mode\n");
-		return -EINVAL;
-	}
-
-	if (priv->port4_phy) {
-		ar8xxx_write(priv, AR8229_REG_OPER_MODE1,
-			     AR8229_REG_OPER_MODE1_PHY4_MII_EN);
-		/* disable port5 to prevent mii conflict */
-		ar8xxx_write(priv, AR8216_REG_PORT_STATUS(5), 0);
-	}
-
-	ar8xxx_phy_init(priv);
-
-	priv->initialized = true;
-	return 0;
-}
-
-static void
-ar8229_init_globals(struct ar8xxx_priv *priv)
-{
-
-	/* Enable CPU port, and disable mirror port */
-	ar8xxx_write(priv, AR8216_REG_GLOBAL_CPUPORT,
-		     AR8216_GLOBAL_CPUPORT_EN |
-		     (15 << AR8216_GLOBAL_CPUPORT_MIRROR_PORT_S));
-
-	/* Setup TAG priority mapping */
-	ar8xxx_write(priv, AR8216_REG_TAG_PRIORITY, 0xfa50);
-
-	/* Enable aging, MAC replacing */
-	ar8xxx_write(priv, AR8216_REG_ATU_CTRL,
-		     0x2b /* 5 min age time */ |
-		     AR8216_ATU_CTRL_AGE_EN |
-		     AR8216_ATU_CTRL_LEARN_CHANGE);
-
-	/* Enable ARP frame acknowledge */
-	ar8xxx_reg_set(priv, AR8229_REG_QM_CTRL,
-		       AR8229_QM_CTRL_ARP_EN);
-
-	/*
-	 * Enable Broadcast/unknown multicast and unicast frames
-	 * transmitted to the CPU port.
-	 */
-	ar8xxx_reg_set(priv, AR8216_REG_FLOOD_MASK,
-		       AR8229_FLOOD_MASK_BC_DP(0) |
-		       AR8229_FLOOD_MASK_MC_DP(0) |
-		       AR8229_FLOOD_MASK_UC_DP(0));
-
-	/* setup MTU */
-	ar8xxx_rmw(priv, AR8216_REG_GLOBAL_CTRL,
-		   AR8236_GCTRL_MTU, AR8236_GCTRL_MTU);
-
-	/* Enable MIB counters */
-	ar8xxx_reg_set(priv, AR8216_REG_MIB_FUNC,
-		       AR8236_MIB_EN);
-
-	/* setup Service TAG */
-	ar8xxx_rmw(priv, AR8216_REG_SERVICE_TAG, AR8216_SERVICE_TAG_M, 0);
-}
-
-static void
-ar8229_init_port(struct ar8xxx_priv *priv, int port)
-{
-	__ar8216_init_port(priv, port, true, true);
-}
-
-
-static int
-ar7240sw_hw_init(struct ar8xxx_priv *priv)
-{
-	if (priv->initialized)
-		return 0;
-
-	ar8xxx_write(priv, AR8216_REG_CTRL, AR8216_CTRL_RESET);
-	ar8xxx_reg_wait(priv, AR8216_REG_CTRL, AR8216_CTRL_RESET, 0, 1000);
-
-	priv->port4_phy = 1;
-	/* disable port5 to prevent mii conflict */
-	ar8xxx_write(priv, AR8216_REG_PORT_STATUS(5), 0);
-
-	ar8xxx_phy_init(priv);
-
-	priv->initialized = true;
-	return 0;
-}
-
-static void
-ar7240sw_init_globals(struct ar8xxx_priv *priv)
-{
-
-	/* Enable CPU port, and disable mirror port */
-	ar8xxx_write(priv, AR8216_REG_GLOBAL_CPUPORT,
-		     AR8216_GLOBAL_CPUPORT_EN |
-		     (15 << AR8216_GLOBAL_CPUPORT_MIRROR_PORT_S));
-
-	/* Setup TAG priority mapping */
-	ar8xxx_write(priv, AR8216_REG_TAG_PRIORITY, 0xfa50);
-
-	/* Enable ARP frame acknowledge, aging, MAC replacing */
-	ar8xxx_write(priv, AR8216_REG_ATU_CTRL,
-		AR8216_ATU_CTRL_RESERVED |
-		0x2b /* 5 min age time */ |
-		AR8216_ATU_CTRL_AGE_EN |
-		AR8216_ATU_CTRL_ARP_EN |
-		AR8216_ATU_CTRL_LEARN_CHANGE);
-
-	/* Enable Broadcast frames transmitted to the CPU */
-	ar8xxx_reg_set(priv, AR8216_REG_FLOOD_MASK,
-		       AR8216_FM_CPU_BROADCAST_EN);
-
-	/* setup MTU */
-	ar8xxx_rmw(priv, AR8216_REG_GLOBAL_CTRL,
-		   AR8216_GCTRL_MTU,
-		   AR8216_GCTRL_MTU);
-
-	/* setup Service TAG */
-	ar8xxx_rmw(priv, AR8216_REG_SERVICE_TAG, AR8216_SERVICE_TAG_M, 0);
-}
-
-static void
-ar7240sw_setup_port(struct ar8xxx_priv *priv, int port, u32 members)
-{
-	return __ar8216_setup_port(priv, port, members, false);
 }
 
 static void
@@ -1078,14 +850,9 @@ ar8236_init_globals(struct ar8xxx_priv *priv)
 	ar8xxx_reg_set(priv, AR8216_REG_ATU_CTRL,
 		   AR8236_ATU_CTRL_RES);
 
-	/*
-	 * Enable Broadcast/unknown multicast and unicast frames
-	 * transmitted to the CPU port.
-	 */
+	/* enable cpu port to receive multicast and broadcast frames */
 	ar8xxx_reg_set(priv, AR8216_REG_FLOOD_MASK,
-		       AR8229_FLOOD_MASK_BC_DP(0) |
-		       AR8229_FLOOD_MASK_MC_DP(0) |
-		       AR8229_FLOOD_MASK_UC_DP(0));
+		   AR8236_FM_CPU_BROADCAST_EN | AR8236_FM_CPU_BCAST_FWD_EN);
 
 	/* Enable MIB counters */
 	ar8xxx_rmw(priv, AR8216_REG_MIB_FUNC, AR8216_MIB_FUNC | AR8236_MIB_EN,
@@ -1213,7 +980,7 @@ ar8xxx_sw_set_vid(struct switch_dev *dev, const struct switch_attr *attr,
 {
 	struct ar8xxx_priv *priv = swdev_to_ar8xxx(dev);
 
-	if (val->port_vlan >= dev->vlans)
+	if (val->port_vlan >= AR8X16_MAX_VLANS)
 		return -EINVAL;
 
 	priv->vlan_id[val->port_vlan] = val->value.i;
@@ -1246,7 +1013,7 @@ ar8xxx_sw_get_ports(struct switch_dev *dev, struct switch_val *val)
 	u8 ports;
 	int i;
 
-	if (val->port_vlan >= dev->vlans)
+	if (val->port_vlan >= AR8X16_MAX_VLANS)
 		return -EINVAL;
 
 	ports = priv->vlan_table[val->port_vlan];
@@ -1286,7 +1053,7 @@ ar8xxx_sw_set_ports(struct switch_dev *dev, struct switch_val *val)
 
 			/* make sure that an untagged port does not
 			 * appear in other vlans */
-			for (j = 0; j < dev->vlans; j++) {
+			for (j = 0; j < AR8X16_MAX_VLANS; j++) {
 				if (j == val->port_vlan)
 					continue;
 				priv->vlan_table[j] &= ~(1 << p->id);
@@ -1365,7 +1132,7 @@ ar8xxx_sw_hw_apply(struct switch_dev *dev)
 	if (!priv->init) {
 		/* calculate the port destination masks and load vlans
 		 * into the vlan translation unit */
-		for (j = 0; j < dev->vlans; j++) {
+		for (j = 0; j < AR8X16_MAX_VLANS; j++) {
 			u8 vp = priv->vlan_table[j];
 
 			if (!vp)
@@ -1418,7 +1185,7 @@ ar8xxx_sw_reset_switch(struct switch_dev *dev)
 	memset(&priv->vlan, 0, sizeof(struct ar8xxx_priv) -
 		offsetof(struct ar8xxx_priv, vlan));
 
-	for (i = 0; i < dev->vlans; i++)
+	for (i = 0; i < AR8X16_MAX_VLANS; i++)
 		priv->vlan_id[i] = i;
 
 	/* Configure all ports */
@@ -1465,62 +1232,6 @@ ar8xxx_sw_set_reset_mibs(struct switch_dev *dev,
 unlock:
 	mutex_unlock(&priv->mib_lock);
 	return ret;
-}
-
-int
-ar8xxx_sw_set_mib_poll_interval(struct switch_dev *dev,
-			       const struct switch_attr *attr,
-			       struct switch_val *val)
-{
-	struct ar8xxx_priv *priv = swdev_to_ar8xxx(dev);
-
-	if (!ar8xxx_has_mib_counters(priv))
-		return -EOPNOTSUPP;
-
-	ar8xxx_mib_stop(priv);
-	priv->mib_poll_interval = val->value.i;
-	ar8xxx_mib_start(priv);
-
-	return 0;
-}
-
-int
-ar8xxx_sw_get_mib_poll_interval(struct switch_dev *dev,
-			       const struct switch_attr *attr,
-			       struct switch_val *val)
-{
-	struct ar8xxx_priv *priv = swdev_to_ar8xxx(dev);
-
-	if (!ar8xxx_has_mib_counters(priv))
-		return -EOPNOTSUPP;
-	val->value.i = priv->mib_poll_interval;
-	return 0;
-}
-
-int
-ar8xxx_sw_set_mib_type(struct switch_dev *dev,
-			       const struct switch_attr *attr,
-			       struct switch_val *val)
-{
-	struct ar8xxx_priv *priv = swdev_to_ar8xxx(dev);
-
-	if (!ar8xxx_has_mib_counters(priv))
-		return -EOPNOTSUPP;
-	priv->mib_type = val->value.i;
-	return 0;
-}
-
-int
-ar8xxx_sw_get_mib_type(struct switch_dev *dev,
-			       const struct switch_attr *attr,
-			       struct switch_val *val)
-{
-	struct ar8xxx_priv *priv = swdev_to_ar8xxx(dev);
-
-	if (!ar8xxx_has_mib_counters(priv))
-		return -EOPNOTSUPP;
-	val->value.i = priv->mib_type;
-	return 0;
 }
 
 int
@@ -1694,7 +1405,7 @@ ar8xxx_sw_get_port_mib(struct switch_dev *dev,
 	int i, len = 0;
 	bool mib_stats_empty = true;
 
-	if (!ar8xxx_has_mib_counters(priv) || !priv->mib_poll_interval)
+	if (!ar8xxx_has_mib_counters(priv))
 		return -EOPNOTSUPP;
 
 	port = val->port_vlan;
@@ -1713,8 +1424,6 @@ ar8xxx_sw_get_port_mib(struct switch_dev *dev,
 
 	mib_stats = &priv->mib_stats[port * chip->num_mibs];
 	for (i = 0; i < chip->num_mibs; i++) {
-		if (chip->mib_decs[i].type > priv->mib_type)
-			continue;
 		mib_name = chip->mib_decs[i].name;
 		mib_data = mib_stats[i];
 		len += snprintf(buf + len, sizeof(priv->buf) - len,
@@ -1807,12 +1516,8 @@ ar8xxx_sw_get_arl_table(struct switch_dev *dev,
 		 */
 		for (j = 0; j < i; ++j) {
 			a1 = &priv->arl_table[j];
-			if (!memcmp(a->mac, a1->mac, sizeof(a->mac))) {
-				/* ignore ports already seen in former entry */
-				a->portmap &= ~a1->portmap;
-				if (!a->portmap)
-					goto duplicate;
-			}
+			if (a->port == a1->port && !memcmp(a->mac, a1->mac, sizeof(a->mac)))
+				goto duplicate;
 		}
 	}
 
@@ -1829,7 +1534,7 @@ ar8xxx_sw_get_arl_table(struct switch_dev *dev,
 	for (j = 0; j < priv->dev.ports; ++j) {
 		for (k = 0; k < i; ++k) {
 			a = &priv->arl_table[k];
-			if (!(a->portmap & BIT(j)))
+			if (a->port != j)
 				continue;
 			len += snprintf(buf + len, sizeof(priv->arl_buf) - len,
 					"Port %d: MAC %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -1881,48 +1586,6 @@ ar8xxx_sw_set_flush_port_arl_table(struct switch_dev *dev,
 	return ret;
 }
 
-int
-ar8xxx_sw_get_port_stats(struct switch_dev *dev, int port,
-			struct switch_port_stats *stats)
-{
-	struct ar8xxx_priv *priv = swdev_to_ar8xxx(dev);
-	u64 *mib_stats;
-
-	if (!ar8xxx_has_mib_counters(priv) || !priv->mib_poll_interval)
-		return -EOPNOTSUPP;
-
-	if (!(priv->chip->mib_rxb_id || priv->chip->mib_txb_id))
-		return -EOPNOTSUPP;
-
-	if (port >= dev->ports)
-		return -EINVAL;
-
-	mutex_lock(&priv->mib_lock);
-
-	mib_stats = &priv->mib_stats[port * priv->chip->num_mibs];
-
-	stats->tx_bytes = mib_stats[priv->chip->mib_txb_id];
-	stats->rx_bytes = mib_stats[priv->chip->mib_rxb_id];
-
-	mutex_unlock(&priv->mib_lock);
-	return 0;
-}
-
-static int
-ar8xxx_phy_read(struct mii_bus *bus, int phy_addr, int reg_addr)
-{
-	struct ar8xxx_priv *priv = bus->priv;
-	return priv->chip->phy_read(priv, phy_addr, reg_addr);
-}
-
-static int
-ar8xxx_phy_write(struct mii_bus *bus, int phy_addr, int reg_addr,
-		 u16 reg_val)
-{
-	struct ar8xxx_priv *priv = bus->priv;
-	return priv->chip->phy_write(priv, phy_addr, reg_addr, reg_val);
-}
-
 static const struct switch_attr ar8xxx_sw_attr_globals[] = {
 	{
 		.type = SWITCH_TYPE_INT,
@@ -1937,20 +1600,6 @@ static const struct switch_attr ar8xxx_sw_attr_globals[] = {
 		.name = "reset_mibs",
 		.description = "Reset all MIB counters",
 		.set = ar8xxx_sw_set_reset_mibs,
-	},
-	{
-		.type = SWITCH_TYPE_INT,
-		.name = "ar8xxx_mib_poll_interval",
-		.description = "MIB polling interval in msecs (0 to disable)",
-		.set = ar8xxx_sw_set_mib_poll_interval,
-		.get = ar8xxx_sw_get_mib_poll_interval
-	},
-	{
-		.type = SWITCH_TYPE_INT,
-		.name = "ar8xxx_mib_type",
-		.description = "MIB type (0=basic 1=extended)",
-		.set = ar8xxx_sw_set_mib_type,
-		.get = ar8xxx_sw_get_mib_type
 	},
 	{
 		.type = SWITCH_TYPE_INT,
@@ -2052,41 +1701,16 @@ static const struct switch_dev_ops ar8xxx_sw_ops = {
 	.apply_config = ar8xxx_sw_hw_apply,
 	.reset_switch = ar8xxx_sw_reset_switch,
 	.get_port_link = ar8xxx_sw_get_port_link,
+/* The following op is disabled as it hogs the CPU and degrades performance.
+   An implementation has been attempted in 4d8a66d but reading MIB data is slow
+   on ar8xxx switches.
+
+   The high CPU load has been traced down to the ar8xxx_reg_wait() call in
+   ar8xxx_mib_op(), which has to usleep_range() till the MIB busy flag set by
+   the request to update the MIB counter is cleared. */
+#if 0
 	.get_port_stats = ar8xxx_sw_get_port_stats,
-};
-
-static const struct ar8xxx_chip ar7240sw_chip = {
-	.caps = AR8XXX_CAP_MIB_COUNTERS,
-
-	.reg_port_stats_start = 0x20000,
-	.reg_port_stats_length = 0x100,
-	.reg_arl_ctrl = AR8216_REG_ATU_CTRL,
-
-	.name = "Atheros AR724X/AR933X built-in",
-	.ports = AR7240SW_NUM_PORTS,
-	.vlans = AR8216_NUM_VLANS,
-	.swops = &ar8xxx_sw_ops,
-
-	.hw_init = ar7240sw_hw_init,
-	.init_globals = ar7240sw_init_globals,
-	.init_port = ar8229_init_port,
-	.phy_read = ar8216_phy_read,
-	.phy_write = ar8216_phy_write,
-	.setup_port = ar7240sw_setup_port,
-	.read_port_status = ar8216_read_port_status,
-	.atu_flush = ar8216_atu_flush,
-	.atu_flush_port = ar8216_atu_flush_port,
-	.vtu_flush = ar8216_vtu_flush,
-	.vtu_load_vlan = ar8216_vtu_load_vlan,
-	.set_mirror_regs = ar8216_set_mirror_regs,
-	.get_arl_entry = ar8216_get_arl_entry,
-	.sw_hw_apply = ar8xxx_sw_hw_apply,
-
-	.num_mibs = ARRAY_SIZE(ar8236_mibs),
-	.mib_decs = ar8236_mibs,
-	.mib_func = AR8216_REG_MIB_FUNC,
-	.mib_rxb_id = AR8236_MIB_RXB_ID,
-	.mib_txb_id = AR8236_MIB_TXB_ID,
+#endif
 };
 
 static const struct ar8xxx_chip ar8216_chip = {
@@ -2116,43 +1740,7 @@ static const struct ar8xxx_chip ar8216_chip = {
 
 	.num_mibs = ARRAY_SIZE(ar8216_mibs),
 	.mib_decs = ar8216_mibs,
-	.mib_func = AR8216_REG_MIB_FUNC,
-	.mib_rxb_id = AR8216_MIB_RXB_ID,
-	.mib_txb_id = AR8216_MIB_TXB_ID,
-};
-
-static const struct ar8xxx_chip ar8229_chip = {
-	.caps = AR8XXX_CAP_MIB_COUNTERS,
-
-	.reg_port_stats_start = 0x20000,
-	.reg_port_stats_length = 0x100,
-	.reg_arl_ctrl = AR8216_REG_ATU_CTRL,
-
-	.name = "Atheros AR8229",
-	.ports = AR8216_NUM_PORTS,
-	.vlans = AR8216_NUM_VLANS,
-	.swops = &ar8xxx_sw_ops,
-
-	.hw_init = ar8229_hw_init,
-	.init_globals = ar8229_init_globals,
-	.init_port = ar8229_init_port,
-	.phy_read = ar8216_phy_read,
-	.phy_write = ar8216_phy_write,
-	.setup_port = ar8236_setup_port,
-	.read_port_status = ar8216_read_port_status,
-	.atu_flush = ar8216_atu_flush,
-	.atu_flush_port = ar8216_atu_flush_port,
-	.vtu_flush = ar8216_vtu_flush,
-	.vtu_load_vlan = ar8216_vtu_load_vlan,
-	.set_mirror_regs = ar8216_set_mirror_regs,
-	.get_arl_entry = ar8216_get_arl_entry,
-	.sw_hw_apply = ar8xxx_sw_hw_apply,
-
-	.num_mibs = ARRAY_SIZE(ar8236_mibs),
-	.mib_decs = ar8236_mibs,
-	.mib_func = AR8216_REG_MIB_FUNC,
-	.mib_rxb_id = AR8236_MIB_RXB_ID,
-	.mib_txb_id = AR8236_MIB_TXB_ID,
+	.mib_func = AR8216_REG_MIB_FUNC
 };
 
 static const struct ar8xxx_chip ar8236_chip = {
@@ -2182,9 +1770,7 @@ static const struct ar8xxx_chip ar8236_chip = {
 
 	.num_mibs = ARRAY_SIZE(ar8236_mibs),
 	.mib_decs = ar8236_mibs,
-	.mib_func = AR8216_REG_MIB_FUNC,
-	.mib_rxb_id = AR8236_MIB_RXB_ID,
-	.mib_txb_id = AR8236_MIB_TXB_ID,
+	.mib_func = AR8216_REG_MIB_FUNC
 };
 
 static const struct ar8xxx_chip ar8316_chip = {
@@ -2214,13 +1800,11 @@ static const struct ar8xxx_chip ar8316_chip = {
 
 	.num_mibs = ARRAY_SIZE(ar8236_mibs),
 	.mib_decs = ar8236_mibs,
-	.mib_func = AR8216_REG_MIB_FUNC,
-	.mib_rxb_id = AR8236_MIB_RXB_ID,
-	.mib_txb_id = AR8236_MIB_TXB_ID,
+	.mib_func = AR8216_REG_MIB_FUNC
 };
 
 static int
-ar8xxx_read_id(struct ar8xxx_priv *priv)
+ar8xxx_id_chip(struct ar8xxx_priv *priv)
 {
 	u32 val;
 	u16 id;
@@ -2245,17 +1829,6 @@ ar8xxx_read_id(struct ar8xxx_priv *priv)
 
 	priv->chip_ver = (id & AR8216_CTRL_VERSION) >> AR8216_CTRL_VERSION_S;
 	priv->chip_rev = (id & AR8216_CTRL_REVISION);
-	return 0;
-}
-
-static int
-ar8xxx_id_chip(struct ar8xxx_priv *priv)
-{
-	int ret;
-
-	ret = ar8xxx_read_id(priv);
-	if(ret)
-		return ret;
 
 	switch (priv->chip_ver) {
 	case AR8XXX_VER_AR8216:
@@ -2287,7 +1860,7 @@ static void
 ar8xxx_mib_work_func(struct work_struct *work)
 {
 	struct ar8xxx_priv *priv;
-	int err, i;
+	int err;
 
 	priv = container_of(work, struct ar8xxx_priv, mib_work.work);
 
@@ -2295,15 +1868,18 @@ ar8xxx_mib_work_func(struct work_struct *work)
 
 	err = ar8xxx_mib_capture(priv);
 	if (err)
-		goto next_attempt;
+		goto next_port;
 
-	for (i = 0; i < priv->dev.ports; i++)
-		ar8xxx_mib_fetch_port_stat(priv, i, false);
+	ar8xxx_mib_fetch_port_stat(priv, priv->mib_next_port, false);
 
-next_attempt:
+next_port:
+	priv->mib_next_port++;
+	if (priv->mib_next_port >= priv->dev.ports)
+		priv->mib_next_port = 0;
+
 	mutex_unlock(&priv->mib_lock);
 	schedule_delayed_work(&priv->mib_work,
-			      msecs_to_jiffies(priv->mib_poll_interval));
+			      msecs_to_jiffies(AR8XXX_MIB_WORK_DELAY));
 }
 
 static int
@@ -2329,17 +1905,17 @@ ar8xxx_mib_init(struct ar8xxx_priv *priv)
 static void
 ar8xxx_mib_start(struct ar8xxx_priv *priv)
 {
-	if (!ar8xxx_has_mib_counters(priv) || !priv->mib_poll_interval)
+	if (!ar8xxx_has_mib_counters(priv))
 		return;
 
 	schedule_delayed_work(&priv->mib_work,
-			      msecs_to_jiffies(priv->mib_poll_interval));
+			      msecs_to_jiffies(AR8XXX_MIB_WORK_DELAY));
 }
 
 static void
 ar8xxx_mib_stop(struct ar8xxx_priv *priv)
 {
-	if (!ar8xxx_has_mib_counters(priv) || !priv->mib_poll_interval)
+	if (!ar8xxx_has_mib_counters(priv))
 		return;
 
 	cancel_delayed_work_sync(&priv->mib_work);
@@ -2378,6 +1954,10 @@ ar8xxx_probe_switch(struct ar8xxx_priv *priv)
 	const struct ar8xxx_chip *chip;
 	struct switch_dev *swdev;
 	int ret;
+
+	ret = ar8xxx_id_chip(priv);
+	if (ret)
+		return ret;
 
 	chip = priv->chip;
 
@@ -2496,7 +2076,8 @@ ar8xxx_phy_read_status(struct phy_device *phydev)
 	struct switch_port_link link;
 
 	/* check for switch port link changes */
-	ar8xxx_check_link_states(priv);
+	if (phydev->state == PHY_CHANGELINK)
+		ar8xxx_check_link_states(priv);
 
 	if (phydev->mdio.addr != 0)
 		return genphy_read_status(phydev);
@@ -2523,8 +2104,7 @@ ar8xxx_phy_read_status(struct phy_device *phydev)
 
 	phydev->state = PHY_RUNNING;
 	netif_carrier_on(phydev->attached_dev);
-	if (phydev->adjust_link)
-		phydev->adjust_link(phydev->attached_dev);
+	phydev->adjust_link(phydev->attached_dev);
 
 	return 0;
 }
@@ -2536,18 +2116,6 @@ ar8xxx_phy_config_aneg(struct phy_device *phydev)
 		return 0;
 
 	return genphy_config_aneg(phydev);
-}
-
-static int
-ar8xxx_get_features(struct phy_device *phydev)
-{
-	struct ar8xxx_priv *priv = phydev->priv;
-
-	linkmode_copy(phydev->supported, PHY_BASIC_FEATURES);
-	if (ar8xxx_has_gige(priv))
-		linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, phydev->supported);
-
-	return 0;
 }
 
 static const u32 ar8xxx_phy_ids[] = {
@@ -2599,7 +2167,7 @@ ar8xxx_phy_probe(struct phy_device *phydev)
 	int ret;
 
 	/* skip PHYs at unused adresses */
-	if (phydev->mdio.addr != 0 && phydev->mdio.addr != 3 && phydev->mdio.addr != 4)
+	if (phydev->mdio.addr != 0 && phydev->mdio.addr != 4)
 		return -ENODEV;
 
 	if (!ar8xxx_is_possible(phydev->mdio.bus))
@@ -2617,16 +2185,6 @@ ar8xxx_phy_probe(struct phy_device *phydev)
 	}
 
 	priv->mii_bus = phydev->mdio.bus;
-	priv->pdev = &phydev->mdio.dev;
-
-	ret = of_property_read_u32(priv->pdev->of_node, "qca,mib-poll-interval",
-				   &priv->mib_poll_interval);
-	if (ret)
-		priv->mib_poll_interval = 0;
-
-	ret = ar8xxx_id_chip(priv);
-	if (ret)
-		goto free_priv;
 
 	ret = ar8xxx_probe_switch(priv);
 	if (ret)
@@ -2647,14 +2205,27 @@ ar8xxx_phy_probe(struct phy_device *phydev)
 found:
 	priv->use_count++;
 
-	if (phydev->mdio.addr == 0 && priv->chip->config_at_probe) {
-		priv->phy = phydev;
+	if (phydev->mdio.addr == 0) {
+		if (ar8xxx_has_gige(priv)) {
+			phydev->supported = SUPPORTED_1000baseT_Full;
+			phydev->advertising = ADVERTISED_1000baseT_Full;
+		} else {
+			phydev->supported = SUPPORTED_100baseT_Full;
+			phydev->advertising = ADVERTISED_100baseT_Full;
+		}
 
-		ret = ar8xxx_start(priv);
-		if (ret)
-			goto err_unregister_switch;
-	} else if (priv->chip->phy_rgmii_set) {
-		priv->chip->phy_rgmii_set(priv, phydev);
+		if (priv->chip->config_at_probe) {
+			priv->phy = phydev;
+
+			ret = ar8xxx_start(priv);
+			if (ret)
+				goto err_unregister_switch;
+		}
+	} else {
+		if (ar8xxx_has_gige(priv)) {
+			phydev->supported |= SUPPORTED_1000baseT_Full;
+			phydev->advertising |= ADVERTISED_1000baseT_Full;
+		}
 	}
 
 	phydev->priv = priv;
@@ -2727,6 +2298,7 @@ static struct phy_driver ar8xxx_phy_driver[] = {
 		.phy_id		= 0x004d0000,
 		.name		= "Atheros AR8216/AR8236/AR8316",
 		.phy_id_mask	= 0xffff0000,
+		.features	= PHY_BASIC_FEATURES,
 		.probe		= ar8xxx_phy_probe,
 		.remove		= ar8xxx_phy_remove,
 		.detach		= ar8xxx_phy_detach,
@@ -2734,176 +2306,8 @@ static struct phy_driver ar8xxx_phy_driver[] = {
 		.config_aneg	= ar8xxx_phy_config_aneg,
 		.read_status	= ar8xxx_phy_read_status,
 		.soft_reset	= ar8xxx_phy_soft_reset,
-		.get_features	= ar8xxx_get_features,
 	}
 };
 
-static const struct of_device_id ar8xxx_mdiodev_of_match[] = {
-	{
-		.compatible = "qca,ar7240sw",
-		.data = &ar7240sw_chip,
-	}, {
-		.compatible = "qca,ar8229",
-		.data = &ar8229_chip,
-	}, {
-		.compatible = "qca,ar8236",
-		.data = &ar8236_chip,
-	}, {
-		.compatible = "qca,ar8327",
-		.data = &ar8327_chip,
-	},
-	{ /* sentinel */ },
-};
-
-static int
-ar8xxx_mdiodev_probe(struct mdio_device *mdiodev)
-{
-	const struct of_device_id *match;
-	struct ar8xxx_priv *priv;
-	struct switch_dev *swdev;
-	struct device_node *mdio_node;
-	int ret;
-
-	match = of_match_device(ar8xxx_mdiodev_of_match, &mdiodev->dev);
-	if (!match)
-		return -EINVAL;
-
-	priv = ar8xxx_create();
-	if (priv == NULL)
-		return -ENOMEM;
-
-	priv->mii_bus = mdiodev->bus;
-	priv->pdev = &mdiodev->dev;
-	priv->chip = (const struct ar8xxx_chip *) match->data;
-
-	ret = of_property_read_u32(priv->pdev->of_node, "qca,mib-poll-interval",
-				   &priv->mib_poll_interval);
-	if (ret)
-		priv->mib_poll_interval = 0;
-
-	ret = ar8xxx_read_id(priv);
-	if (ret)
-		goto free_priv;
-
-	ret = ar8xxx_probe_switch(priv);
-	if (ret)
-		goto free_priv;
-
-	if (priv->chip->phy_read && priv->chip->phy_write) {
-		priv->sw_mii_bus = devm_mdiobus_alloc(&mdiodev->dev);
-		priv->sw_mii_bus->name = "ar8xxx-mdio";
-		priv->sw_mii_bus->read = ar8xxx_phy_read;
-		priv->sw_mii_bus->write = ar8xxx_phy_write;
-		priv->sw_mii_bus->priv = priv;
-		priv->sw_mii_bus->parent = &mdiodev->dev;
-		snprintf(priv->sw_mii_bus->id, MII_BUS_ID_SIZE, "%s",
-			 dev_name(&mdiodev->dev));
-		mdio_node = of_get_child_by_name(priv->pdev->of_node, "mdio-bus");
-		ret = of_mdiobus_register(priv->sw_mii_bus, mdio_node);
-		if (ret)
-			goto free_priv;
-	}
-
-	swdev = &priv->dev;
-	swdev->alias = dev_name(&mdiodev->dev);
-
-	if (of_property_read_bool(priv->pdev->of_node, "qca,phy4-mii-enable")) {
-		priv->port4_phy = true;
-		swdev->ports--;
-	}
-
-	ret = register_switch(swdev, NULL);
-	if (ret)
-		goto free_priv;
-
-	pr_info("%s: %s rev. %u switch registered on %s\n",
-		swdev->devname, swdev->name, priv->chip_rev,
-		dev_name(&priv->mii_bus->dev));
-
-	mutex_lock(&ar8xxx_dev_list_lock);
-	list_add(&priv->list, &ar8xxx_dev_list);
-	mutex_unlock(&ar8xxx_dev_list_lock);
-
-	priv->use_count++;
-
-	ret = ar8xxx_start(priv);
-	if (ret)
-		goto err_unregister_switch;
-
-	dev_set_drvdata(&mdiodev->dev, priv);
-
-	return 0;
-
-err_unregister_switch:
-	if (--priv->use_count)
-		return ret;
-
-	unregister_switch(&priv->dev);
-
-free_priv:
-	ar8xxx_free(priv);
-	return ret;
-}
-
-static void
-ar8xxx_mdiodev_remove(struct mdio_device *mdiodev)
-{
-	struct ar8xxx_priv *priv = dev_get_drvdata(&mdiodev->dev);
-
-	if (WARN_ON(!priv))
-		return;
-
-	mutex_lock(&ar8xxx_dev_list_lock);
-
-	if (--priv->use_count > 0) {
-		mutex_unlock(&ar8xxx_dev_list_lock);
-		return;
-	}
-
-	list_del(&priv->list);
-	mutex_unlock(&ar8xxx_dev_list_lock);
-
-	unregister_switch(&priv->dev);
-	ar8xxx_mib_stop(priv);
-	if(priv->sw_mii_bus)
-		mdiobus_unregister(priv->sw_mii_bus);
-	ar8xxx_free(priv);
-}
-
-static struct mdio_driver ar8xxx_mdio_driver = {
-	.probe  = ar8xxx_mdiodev_probe,
-	.remove = ar8xxx_mdiodev_remove,
-	.mdiodrv.driver = {
-		.name = "ar8xxx-switch",
-		.of_match_table = ar8xxx_mdiodev_of_match,
-	},
-};
-
-static int __init ar8216_init(void)
-{
-	int ret;
-
-	ret = phy_drivers_register(ar8xxx_phy_driver,
-				   ARRAY_SIZE(ar8xxx_phy_driver),
-				   THIS_MODULE);
-	if (ret)
-		return ret;
-
-	ret = mdio_driver_register(&ar8xxx_mdio_driver);
-	if (ret)
-		phy_drivers_unregister(ar8xxx_phy_driver,
-				       ARRAY_SIZE(ar8xxx_phy_driver));
-
-	return ret;
-}
-module_init(ar8216_init);
-
-static void __exit ar8216_exit(void)
-{
-	mdio_driver_unregister(&ar8xxx_mdio_driver);
-	phy_drivers_unregister(ar8xxx_phy_driver,
-			        ARRAY_SIZE(ar8xxx_phy_driver));
-}
-module_exit(ar8216_exit);
-
+module_phy_driver(ar8xxx_phy_driver);
 MODULE_LICENSE("GPL");
