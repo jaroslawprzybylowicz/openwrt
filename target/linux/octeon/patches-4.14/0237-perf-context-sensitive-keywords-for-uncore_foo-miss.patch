@@ -1,0 +1,46 @@
+From 73962abc11d2a40f6d21da6db2b70c9b4afff1fb Mon Sep 17 00:00:00 2001
+From: Peter Swain <peter.swain@cavium.com>
+Date: Fri, 17 May 2019 20:42:04 +0200
+Subject: [PATCH 237/345] perf: context-sensitive keywords: for
+ uncore_foo/miss/
+
+Previously the inbuilt event names could not be re-used in subsystem
+context, like uncore_foo/miss/, because "miss" was always recognized
+as a builtin keyword by the lexer.
+
+Now such useful event names as "cycles", "store", "miss" and "ops"
+are only recognized as builtin events in the <INITIAL> state,
+so they're free to be re-used without conflict as the names of
+events within add-in subsystems. This allows event-naming to follow
+hardware docs, avoiding an extra level of name-mapping documentation.
+
+Running "perf stat -a -e cycles,uncore_dma/cycles/" is now allowed.
+
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ tools/perf/util/parse-events.l | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/perf/util/parse-events.l b/tools/perf/util/parse-events.l
+index 025729510525..77a74c157ea5 100644
+--- a/tools/perf/util/parse-events.l
++++ b/tools/perf/util/parse-events.l
+@@ -286,6 +286,7 @@ no-overwrite		{ return term(yyscanner, PARSE_EVENTS__TERM_TYPE_NOOVERWRITE); }
+ <<EOF>>			{ BEGIN(INITIAL); }
+ }
+ 
++<INITIAL>{
+ cpu-cycles|cycles				{ return sym(yyscanner, PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES); }
+ stalled-cycles-frontend|idle-cycles-frontend	{ return sym(yyscanner, PERF_TYPE_HARDWARE, PERF_COUNT_HW_STALLED_CYCLES_FRONTEND); }
+ stalled-cycles-backend|idle-cycles-backend	{ return sym(yyscanner, PERF_TYPE_HARDWARE, PERF_COUNT_HW_STALLED_CYCLES_BACKEND); }
+@@ -333,6 +334,7 @@ prefetch|prefetches			|
+ speculative-read|speculative-load	|
+ refs|Reference|ops|access		|
+ misses|miss				{ return str(yyscanner, PE_NAME_CACHE_OP_RESULT); }
++}
+ 
+ mem:			{ BEGIN(mem); return PE_PREFIX_MEM; }
+ r{num_raw_hex}		{ return raw(yyscanner); }
+-- 
+2.25.1
+

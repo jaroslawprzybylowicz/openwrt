@@ -1,0 +1,56 @@
+From f9d8d0609325d5739ef677dca06ffccc10434435 Mon Sep 17 00:00:00 2001
+From: Andrew Pinski <apinski@cavium.com>
+Date: Sat, 18 May 2019 20:00:32 +0200
+Subject: [PATCH 236/345] MIPS: Fix arch in assembly for saa instruction.
+
+This patch fixes the ".set arch" for the saa instruction so that it works with the upstream binutils.
+
+Signed-off-by: Andrew Pinski <apinski@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/include/asm/atomic.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/mips/include/asm/atomic.h b/arch/mips/include/asm/atomic.h
+index 0c6cd8102ae8..3c6b0ea3c08d 100644
+--- a/arch/mips/include/asm/atomic.h
++++ b/arch/mips/include/asm/atomic.h
+@@ -53,7 +53,7 @@ static inline void atomic_add(int i, atomic_t *v)
+ {
+ 	__asm__ __volatile__(
+ 	".set	push\n\t"
+-	".set	arch=octeon\n\t"
++	".set	arch=octeon+\n\t"
+ 	"saa    %1, (%2)\t# atomic_add (%0)\n\t"
+ 	".set	pop"
+ 	: "+m" (v->counter)
+@@ -71,7 +71,7 @@ static inline void atomic_sub(int i, atomic_t *v)
+ {
+ 	__asm__ __volatile__(
+ 	".set	push\n\t"
+-	".set	arch=octeon\n\t"
++	".set	arch=octeon+\n\t"
+ 	"saa    %1, (%2)\t# atomic_sub(%0)\n\t"
+ 	".set	pop"
+ 	: "+m" (v->counter)
+@@ -544,7 +544,7 @@ static inline void atomic64_add(long i, atomic64_t *v)
+ {
+ 	__asm__ __volatile__(
+ 	".set	push\n\t"
+-	".set	arch=octeon\n\t"
++	".set	arch=octeon+\n\t"
+ 	"saad   %1, (%2)\t# atomic64_add (%0)\n\t"
+ 	".set	pop"
+ 	: "+m" (v->counter)
+@@ -562,7 +562,7 @@ static inline void atomic64_sub(long i, atomic64_t *v)
+ {
+ 	__asm__ __volatile__(
+ 	".set	push\n\t"
+-	".set	arch=octeon\n\t"
++	".set	arch=octeon+\n\t"
+ 	"saad    %1, (%2)\t# atomic64_sub (%0)\n\t"
+ 	".set	pop"
+ 	: "+m" (v->counter)
+-- 
+2.25.1
+

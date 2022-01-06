@@ -1,0 +1,43 @@
+From 5e56341614fcff314ee2807a55ed0447317ba875 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sun, 12 May 2019 16:09:23 +0200
+Subject: [PATCH 135/345] MIPS: OCTEON: Use virt_to_phys() and phys_to_virt()
+ in octeon/setup.c
+
+Replace various instances of cvmx_ptr_to_phys() and cvmx_phys_to_ptr()
+with the proper Linux counterparts.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <carlos.munoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 4b0a0e0e1910..a9425f5dd165 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -722,8 +722,7 @@ void __init prom_init(void)
+ 	 * $a3, this is available as fw_arg3.
+ 	 */
+ 	octeon_boot_desc_ptr = (struct octeon_boot_descriptor *)fw_arg3;
+-	octeon_bootinfo =
+-		cvmx_phys_to_ptr(octeon_boot_desc_ptr->cvmx_desc_vaddr);
++	octeon_bootinfo = phys_to_virt(octeon_boot_desc_ptr->cvmx_desc_vaddr);
+ 	cvmx_bootmem_init(cvmx_phys_to_ptr(octeon_bootinfo->phy_mem_desc_addr));
+ 
+ 	sysinfo = cvmx_sysinfo_get();
+@@ -918,8 +917,7 @@ void __init prom_init(void)
+ 	arcs_cmdline[0] = 0;
+ 	argc = octeon_boot_desc_ptr->argc;
+ 	for (i = 0; i < argc; i++) {
+-		const char *arg =
+-			cvmx_phys_to_ptr(octeon_boot_desc_ptr->argv[i]);
++		const char *arg = phys_to_virt(octeon_boot_desc_ptr->argv[i]);
+ 		if (strncmp(arg, "mem=block:", 10) == 0) {
+ 			const char *pos = arg + 10;
+ 			int j;
+-- 
+2.25.1
+

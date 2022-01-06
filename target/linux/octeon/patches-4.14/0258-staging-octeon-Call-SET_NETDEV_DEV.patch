@@ -1,0 +1,35 @@
+From fb4db817a016b76d7319767f99794e7a8cc5f837 Mon Sep 17 00:00:00 2001
+From: Florian Fainelli <f.fainelli@gmail.com>
+Date: Sun, 12 May 2019 14:18:39 +0200
+Subject: [PATCH 258/345] staging: octeon: Call SET_NETDEV_DEV()
+
+The Octeon driver calls into PHYLIB which now checks for
+net_device->dev.parent, so make sure we do set it before calling into
+any MDIO/PHYLIB related function.
+
+Fixes: ec988ad78ed6 ("phy: Don't increment MDIO bus refcount unless it's a different owner")
+Reported-by: Aaro Koskinen <aaro.koskinen@iki.fi>
+Cc: stable <stable@vger.kernel.org>  # 4.9+
+Signed-off-by: Florian Fainelli <f.fainelli@gmail.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+[david.daney@cavium.com] ported to SDK kernel
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/ethernet.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet.c b/drivers/net/ethernet/cavium/octeon/ethernet.c
+index 55c91efba778..2f2303bdc8ea 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet.c
+@@ -930,6 +930,7 @@ static int cvm_oct_probe(struct platform_device *pdev)
+ 				dev->tx_queue_len = 0;
+ 
+ 			/* Initialize the device private structure. */
++			SET_NETDEV_DEV(dev, &pdev->dev);
+ 			priv = netdev_priv(dev);
+ 			INIT_LIST_HEAD(&priv->srio_bcast);
+ 			priv->of_node = cvm_oct_node_for_port(pip, interface, interface_port);
+-- 
+2.25.1
+

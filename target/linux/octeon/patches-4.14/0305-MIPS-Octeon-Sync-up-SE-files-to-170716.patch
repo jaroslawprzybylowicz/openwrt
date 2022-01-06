@@ -1,0 +1,94 @@
+From 739cf0f312db6466cc126544a2e1d14c94d16210 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Mon, 20 May 2019 13:32:10 +0200
+Subject: [PATCH 305/345] MIPS:Octeon: Sync-up SE files to 170716.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ .../cavium-octeon/executive/cvmx-helper-pki.c |  8 ++++---
+ .../cavium-octeon/executive/octeon-model.c    | 24 ++++++++++++-------
+ 2 files changed, 20 insertions(+), 12 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-pki.c b/arch/mips/cavium-octeon/executive/cvmx-helper-pki.c
+index 796d667ce273..bf7430558d57 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-pki.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-pki.c
+@@ -266,7 +266,9 @@ static int __cvmx_helper_setup_pki_cluster_groups(int node)
+ 	int cl_group;
+ 
+ 	cl_group = cvmx_pki_cluster_grp_alloc(node, pki_dflt_clgrp[node].grp_num);
+-	if (cl_group == -1) {
++	if (cl_group == CVMX_RESOURCE_ALLOC_FAILED)
++		return -1;
++	else if (cl_group == CVMX_RESOURCE_ALREADY_RESERVED) {
+ 		if (pki_dflt_clgrp[node].grp_num == -1)
+ 			return -1;
+ 		else
+@@ -1135,9 +1137,9 @@ int cvmx_helper_pki_init_port(int ipd_port, struct cvmx_pki_prt_schd *prtsch)
+ 		cvmx_dprintf("%s ERROR: style not available\n",
+ 			__func__);
+ 		return CVMX_RESOURCE_ALLOC_FAILED;
+-	}
++	} else
++		prtsch->style = rs;
+ 
+-	prtsch->style = rs;
+ 	if (pki_helper_debug)
+ 		cvmx_dprintf("%s: port %d has style %d\n",
+ 		__func__, ipd_port, prtsch->style);
+diff --git a/arch/mips/cavium-octeon/executive/octeon-model.c b/arch/mips/cavium-octeon/executive/octeon-model.c
+index 3ce04758efab..ba070e41e334 100644
+--- a/arch/mips/cavium-octeon/executive/octeon-model.c
++++ b/arch/mips/cavium-octeon/executive/octeon-model.c
+@@ -43,7 +43,7 @@
+  * File defining functions for working with different Octeon
+  * models.
+  *
+- * <hr>$Revision: 144107 $<hr>
++ * <hr>$Revision: 170715 $<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/octeon.h>
+@@ -484,12 +484,19 @@ const char *octeon_model_get_string_buffer(uint32_t chip_id, char *buffer)
+ 			family = "72";
+ 		if (cvmx_fuse_read(76))
+ 			family = "23";
+-		if (cvmx_fuse_read(82)		/* Compression/Decompression */
++		if (cvmx_fuse_read(88)		/* L2c Cripple */
++		    && cvmx_fuse_read(82)	/* Compression/Decompression */
+ 		    && cvmx_fuse_read(90)	/* HFA */
+-		    && cvmx_fuse_read(102)	/* RAID */
+ 		    && cvmx_fuse_read(134))	/* HNA */ {
+ 			family = "72";
+-			suffix = "CCP";
++			suffix = "AAP";
++		    	if (cvmx_fuse_read(102))	/* RAID */
++				suffix = "CCP";
++			else if (cvmx_fuse_read(80)	/* aes/desh/hash disable */
++			    && cvmx_fuse_read(102)	/* RAID */
++			    && cvmx_fuse_read(81)) {	/* vmul disable */
++				suffix = "CP";
++			}
+ 		} else if (fus_dat3.cn73xx.nozip
+ 				&& fus_dat3.cn73xx.nodfa_dte
+ 				&& fus_dat3.cn73xx.nohna_dte) {
+@@ -505,12 +512,11 @@ const char *octeon_model_get_string_buffer(uint32_t chip_id, char *buffer)
+ 		break;
+ 	case 0x98:		/* CN75XX */
+ 		family = "F75";
+-	    if(cvmx_fuse_read(1600))
+-		{
++		if (cvmx_fuse_read(1601))
++			family = "F73";
++		if (cvmx_fuse_read(1600)) {
+ 			suffix = "NSP";
+-		}
+-		else
+-		{
++		} else {
+ 			suffix = "DSP";
+ 		}
+ 		break;
+-- 
+2.25.1
+

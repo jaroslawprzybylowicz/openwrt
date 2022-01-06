@@ -1,0 +1,35 @@
+From 86e4a9681c080f847a19648706290ff633fdbe9a Mon Sep 17 00:00:00 2001
+From: Jan Glauber <jglauber@cavium.com>
+Date: Tue, 14 May 2019 21:41:47 +0200
+Subject: [PATCH 255/345] MAINTAINERS: Add entry for Cavium MMC driver
+
+Signed-off-by: Jan Glauber <jglauber@cavium.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Steven J. Hill <steven.hill@cavium.com>
+Signed-off-by: Ulf Hansson <ulf.hansson@linaro.org>
+---
+ MAINTAINERS | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 546beb6b0176..9c5e056d8fd7 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -3192,6 +3192,14 @@ S:	Supported
+ F:	drivers/i2c/busses/i2c-octeon*
+ F:	drivers/i2c/busses/i2c-thunderx*
+ 
++CAVIUM MMC DRIVER
++M:	Jan Glauber <jglauber@cavium.com>
++M:	David Daney <david.daney@cavium.com>
++M:	Steven J. Hill <Steven.Hill@cavium.com>
++W:	http://www.cavium.com
++S:	Supported
++F:	drivers/mmc/host/cavium*
++
+ CAVIUM LIQUIDIO NETWORK DRIVER
+ M:	Derek Chickles <derek.chickles@caviumnetworks.com>
+ M:	Satanand Burla <satananda.burla@caviumnetworks.com>
+-- 
+2.25.1
+

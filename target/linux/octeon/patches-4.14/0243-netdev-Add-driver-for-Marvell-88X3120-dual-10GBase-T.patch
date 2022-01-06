@@ -1,0 +1,190 @@
+From a18a94c9751e4990c95e1e3c7e52fb432a77a61f Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Mon, 6 May 2019 18:41:53 +0200
+Subject: [PATCH 243/345] netdev: Add driver for Marvell 88X3120 dual 10GBase-T
+ Ethernet phy
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/net/phy/Kconfig           |   8 ++
+ drivers/net/phy/Makefile          |   1 +
+ drivers/net/phy/marvell-88x3120.c | 129 ++++++++++++++++++++++++++++++
+ 3 files changed, 138 insertions(+)
+ create mode 100644 drivers/net/phy/marvell-88x3120.c
+
+diff --git a/drivers/net/phy/Kconfig b/drivers/net/phy/Kconfig
+index ac03f2ffc2df..b21b892be339 100644
+--- a/drivers/net/phy/Kconfig
++++ b/drivers/net/phy/Kconfig
+@@ -363,6 +363,9 @@ config CS4318_PHY
+ 
+ config DAVICOM_PHY
+ 	tristate "Davicom PHYs"
++
++config ICPLUS_PHY
++	tristate "Drivers for ICPlus PHYs"
+ 	---help---
+ 	  Currently supports dm9161e and dm9131
+ 
+@@ -430,6 +433,11 @@ config MESON_GXL_PHY
+ 	---help---
+ 	  Currently has a driver for the Amlogic Meson GXL Internal PHY
+ 
++config MARVELL_88X3120_PHY
++	tristate "Marvell 88X3120/88X3140 10GBase-T PHYs"
++	help
++	  Currently supports the 88X3120 PHY.
++
+ config MICREL_PHY
+ 	tristate "Micrel PHYs"
+ 	---help---
+diff --git a/drivers/net/phy/Makefile b/drivers/net/phy/Makefile
+index d60fd6b296f2..a0a5f9c1b2f5 100644
+--- a/drivers/net/phy/Makefile
++++ b/drivers/net/phy/Makefile
+@@ -82,6 +82,7 @@ obj-$(CONFIG_LXT_PHY)		+= lxt.o
+ obj-$(CONFIG_MARVELL_PHY)	+= marvell.o
+ obj-$(CONFIG_MARVELL_10G_PHY)	+= marvell10g.o
+ obj-$(CONFIG_MESON_GXL_PHY)	+= meson-gxl.o
++obj-$(CONFIG_MARVELL_88X3120_PHY) += marvell-88x3120.o
+ obj-$(CONFIG_MICREL_KS8995MA)	+= spi_ks8995.o
+ obj-$(CONFIG_MICREL_PHY)	+= micrel.o
+ obj-$(CONFIG_MICROCHIP_PHY)	+= microchip.o
+diff --git a/drivers/net/phy/marvell-88x3120.c b/drivers/net/phy/marvell-88x3120.c
+new file mode 100644
+index 000000000000..7b9d931e197c
+--- /dev/null
++++ b/drivers/net/phy/marvell-88x3120.c
+@@ -0,0 +1,129 @@
++/*
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2015 Cavium, Inc.
++ */
++
++#include <linux/module.h>
++#include <linux/phy.h>
++#include <linux/of.h>
++
++#define PHY_ID_MARVELL_88X3120 0x01405896
++
++#define MARVELL_PMA_STATUS1 (MII_ADDR_C45 | 0x10001)
++#define MARVELL_LASI_CONTROL (MII_ADDR_C45 | 0x19002)
++#define MARVELL_LASI_STATUS (MII_ADDR_C45 | 0x19005)
++
++static int m88x3120_config_init(struct phy_device *phydev)
++{
++	phydev->supported = SUPPORTED_10000baseR_FEC;
++	phydev->advertising = ADVERTISED_10000baseR_FEC;
++	phydev->state = PHY_NOLINK;
++	phydev->autoneg = AUTONEG_DISABLE;
++
++	return 0;
++}
++
++static int m88x3120_config_aneg(struct phy_device *phydev)
++{
++	return -EINVAL;
++}
++
++static int m88x3120_read_status(struct phy_device *phydev)
++{
++	int status;
++
++	status = phy_read(phydev, MARVELL_PMA_STATUS1);
++
++	/* Check the receive-linux-status bit */
++	if ((status & 0x4) == 0)
++		goto no_link;
++	phydev->speed = 10000;
++	phydev->link = 1;
++	phydev->duplex = 1;
++	return 0;
++
++no_link:
++	phydev->link = 0;
++	return 0;
++}
++
++static int m88x3120_config_intr(struct phy_device *phydev)
++{
++	int reg, err;
++
++	reg = phy_read(phydev, MARVELL_LASI_CONTROL);
++
++	if (reg < 0)
++		return reg;
++
++	/* Clear RX_ALARM, TX_ALARM, and LS_ALARM ... */
++	reg &= ~7;
++
++	/* ... then set LS_ALARM if requested. */
++	if (phydev->interrupts == PHY_INTERRUPT_ENABLED)
++		reg |= 1;
++
++	err = phy_write(phydev, MARVELL_LASI_CONTROL, reg);
++	return err;
++}
++
++static int m88x3120_did_interrupt(struct phy_device *phydev)
++{
++	int reg;
++
++	reg = phy_read(phydev, MARVELL_LASI_STATUS);
++
++	if (reg < 0) {
++		dev_err(&phydev->mdio.dev,
++			"Error: Read of MARVELL_LASI_STATUS failed: %d\n", reg);
++		return 0;
++	}
++	return (reg & 1) != 0;
++}
++
++static int  m88x3120_ack_interrupt(struct phy_device *phydev)
++{
++	/* Reading the LASI status clears it. */
++	m88x3120_did_interrupt(phydev);
++	return 0;
++}
++
++static int m88x3120_match_phy_device(struct phy_device *phydev)
++{
++	return phydev->c45_ids.device_ids[1] == PHY_ID_MARVELL_88X3120;
++}
++
++static struct phy_driver m88x3120_driver[] = {
++{
++	.phy_id		= 0,
++	.phy_id_mask	= 0,
++	.name		= "Marvell 88X3120",
++	.flags		= PHY_HAS_INTERRUPT,
++	.config_init	= m88x3120_config_init,
++	.config_aneg	= m88x3120_config_aneg,
++	.read_status	= m88x3120_read_status,
++	.ack_interrupt	= m88x3120_ack_interrupt,
++	.config_intr	= m88x3120_config_intr,
++	.did_interrupt	= m88x3120_did_interrupt,
++	.match_phy_device = m88x3120_match_phy_device,
++} };
++
++static int __init m88x3120_init(void)
++{
++	return phy_drivers_register(m88x3120_driver,
++				    ARRAY_SIZE(m88x3120_driver),
++				    THIS_MODULE);
++}
++module_init(m88x3120_init);
++
++static void __exit m88x3120_exit(void)
++{
++	phy_drivers_unregister(m88x3120_driver,
++		ARRAY_SIZE(m88x3120_driver));
++}
++module_exit(m88x3120_exit);
++
++MODULE_LICENSE("GPL");
+-- 
+2.25.1
+

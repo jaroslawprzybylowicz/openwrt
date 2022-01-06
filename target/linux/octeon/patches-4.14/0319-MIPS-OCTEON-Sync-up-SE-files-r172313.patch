@@ -1,0 +1,33 @@
+From 0ebf77d930763ebffaa0d97055e7e3006a68ef56 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Mon, 3 Jun 2019 17:45:38 +0200
+Subject: [PATCH 319/345] MIPS:OCTEON: Sync-up SE files (r172313)
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/executive/cvmx-l2c.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-l2c.c b/arch/mips/cavium-octeon/executive/cvmx-l2c.c
+index 09a8d5256482..41940734c3b7 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-l2c.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-l2c.c
+@@ -1121,6 +1121,7 @@ uint64_t cvmx_l2c_tqdl2d_to_index_7xxx(int node, int tad)
+ 	 */
+ 	return cindex;
+ }
++EXPORT_SYMBOL(cvmx_l2c_tqdl2d_to_index_7xxx);
+ 
+ /**
+  * Decodes TTG tag single and double-bit errors to the appropriate cache index
+@@ -1205,6 +1206,7 @@ uint64_t cvmx_l2c_ttgx_to_index_7xxx(int node, int tad, bool remote)
+ 	 */
+ 	return cindex;
+ }
++EXPORT_SYMBOL(cvmx_l2c_ttgx_to_index_7xxx);
+ 
+ int cvmx_l2c_get_cache_size_bytes(void)
+ {
+-- 
+2.25.1
+

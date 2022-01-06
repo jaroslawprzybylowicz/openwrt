@@ -1,0 +1,213 @@
+From b0a1baebf2395c90664dde52dfcc6404fc6c1139 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lukaszm@marvell.com>
+Date: Wed, 16 Oct 2019 10:44:40 +0200
+Subject: [PATCH 344/345] MIPS: Octeon: kexec
+
+The Linux kernel on the Octeon platform gets information about
+available memory from two sources: named blocks or a list of
+free memory blocks obtained from the bootmem descriptor block.
+
+Named blocks can be allocated in u-boot using namedalloc and passed
+to the kernel via the "mem=block:blocknam1,blockname2,..." kernel
+parameter. The current kernel supports four blocks. If "mem=block:..."
+is specified only the named blocks listed are used for kernel memory,
+and any other free memory is ignored.
+
+Named blocks can also be used to pass the location of the initramfs in
+memory to the kernel instead of rd_start and rd_size.
+
+The free memory list consists of a linked list with a size and
+a pointer to the next block at the beginning of each free block.
+The list is managed by cvmx-bootmem.c. The list is modified in
+memory as plat_mem_setup() calls cvmx_bootmem_phy_alloc() to add to
+the kernel's list of memory regions. Unless restricted, the kernel
+will try to use all of the memory.
+
+Kexec on Octeon MIPS is currently only supported with named blocks.
+The use of named blocks requires a certain amount of bookkeeping, because
+not all memory is free when u-boot is running, and there is always the
+possibility that namedalloc might fail if something changes. Also to
+allocate a named block in space above 4GB, a specific allocation address
+must be specified. It is difficult to constuct a list of such blocks
+that uses all the memory.
+
+The free list is more flexible and allows the kernel to use most of the
+available memory, but presents a problem for kexec. Since the free list
+is updated in memory as the kernel runs, there is little or no memory
+available when plat_mem_setup() runs in the new kernel. There is an
+additional problem in that cvmx_bootmem_phy_alloc() does not allocate
+on page boundaries. There is at least one case where the kernel
+assumes a page boundary resulting in the overwrite of the header at
+the beginning of a free block.
+
+This patch changes Octeon memory management so that both named blocks
+and the free list may be used together. It saves the initial free list
+and restores it before kexec starts a new kernel. A single named block
+is needed for the lower memory region where the kernel resides to allow
+kexec to load a kernel that is substantially larger than running kernel.
+It is probably possible to remove this requirement in the future.
+
+Even with this patch applied only the latest kexec with several Octeon
+patches will work.
+
+Change-Id: I198f790d68588a48276642fc618d0a300fd66b0b
+Signed-off-by: Henry Willard <henry.willard@oracle.com>
+---
+ .../cavium-octeon/executive/cvmx-bootmem.c    | 79 +++++++++++++++++++
+ arch/mips/cavium-octeon/setup.c               |  5 +-
+ arch/mips/include/asm/octeon/cvmx-bootmem.h   | 12 +++
+ 3 files changed, 93 insertions(+), 3 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-bootmem.c b/arch/mips/cavium-octeon/executive/cvmx-bootmem.c
+index 49c174840a99..df5065873e1b 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-bootmem.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-bootmem.c
+@@ -1059,6 +1059,85 @@ void cvmx_bootmem_phy_list_print(void)
+ 	cvmx_printf("\n\n");
+ }
+ 
++#define CVMX_BOOTMEM_SAVELIST_SIZE 32
++
++
++struct cvmx_bootmem_phy_save_list{
++	uint64_t next;
++	uint64_t size;
++};
++
++static
++struct cvmx_bootmem_phy_save_list cvmx_bootmem_phy_save_list[CVMX_BOOTMEM_SAVELIST_SIZE];
++static uint64_t saved_head_addr;
++
++void cvmx_bootmem_phy_list_save(void)
++{
++	uint64_t addr;
++	int      i, j;
++
++	__cvmx_bootmem_lock(0);
++	addr = CVMX_BOOTMEM_DESC_GET_FIELD(head_addr);
++	saved_head_addr = addr;
++	if (CVMX_BOOTMEM_DESC_GET_FIELD(major_version) > 3)
++		cvmx_dprintf("Warning: Bootmem descriptor version is newer than expected\n");
++
++	for (i = 0; i < CVMX_BOOTMEM_SAVELIST_SIZE; ++i) {
++		if (!addr)
++			break;
++
++		cvmx_bootmem_phy_save_list[i].next = cvmx_bootmem_phy_get_next(addr);
++		cvmx_bootmem_phy_save_list[i].size = cvmx_bootmem_phy_get_size(addr);
++		addr = cvmx_bootmem_phy_get_next(addr);
++	}
++	if (i == CVMX_BOOTMEM_SAVELIST_SIZE) {
++		cvmx_dprintf("Warning: Unable to save entire bootmem list\n");
++		cvmx_bootmem_phy_save_list[i-1].next = 0; /* Make sure of termination */
++	}
++
++	/*
++	 * Align addresses to page boundaries where possible. u-boot and the kernel
++	 * don't agree on whether the memory following the kernel is free or not.
++	 * u-boot may place a free memory block header behind the kernel, which
++	 * may be over-written by the kexec process because the kernel assumes it
++	 * owns the memory to the next page boundary.
++	 */
++	for (j = 0; j < i; ++j) {
++		uint64_t aligned_next;
++		uint64_t size_adj = 0;
++
++		aligned_next = PFN_ALIGN(cvmx_bootmem_phy_save_list[j].next);
++		size_adj = aligned_next - cvmx_bootmem_phy_save_list[j].next;
++		if (size_adj && size_adj < (cvmx_bootmem_phy_save_list[j+1].size-16)) {
++			cvmx_bootmem_phy_save_list[j].next = aligned_next;
++			cvmx_bootmem_phy_save_list[j+1].size -= size_adj;
++		}
++	}
++	__cvmx_bootmem_unlock(0);
++}
++
++void cvmx_bootmem_phy_list_restore(void)
++{
++	uint64_t addr;
++	int      i;
++
++	__cvmx_bootmem_lock(0);
++	addr = saved_head_addr;
++	CVMX_BOOTMEM_DESC_SET_FIELD(head_addr, addr);
++	if (CVMX_BOOTMEM_DESC_GET_FIELD(major_version) > 3)
++		cvmx_dprintf("Warning: Bootmem descriptor version is newer than expected\n");
++
++	for (i = 0; i < CVMX_BOOTMEM_SAVELIST_SIZE; ++i) {
++		if (!addr)
++			break;
++
++		cvmx_bootmem_phy_set_next(addr, cvmx_bootmem_phy_save_list[i].next);
++		cvmx_bootmem_phy_set_size(addr, cvmx_bootmem_phy_save_list[i].size);
++		addr = cvmx_bootmem_phy_save_list[i].next;;
++	}
++	__cvmx_bootmem_unlock(0);
++}
++
+ uint64_t cvmx_bootmem_phy_available_mem(uint64_t min_block_size)
+ {
+ 	uint64_t addr;
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index ac9b6a8f4bdb..491c78642fe2 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -180,6 +180,7 @@ static void octeon_shutdown(void)
+ 		cpu_relax();
+ 		mdelay(1);
+ 	}
++	cvmx_bootmem_phy_list_restore();
+ #endif
+ }
+ 
+@@ -685,6 +686,7 @@ void __init prom_init(void)
+ 	octeon_boot_desc_ptr = (struct octeon_boot_descriptor *)fw_arg3;
+ 	octeon_bootinfo = phys_to_virt(octeon_boot_desc_ptr->cvmx_desc_vaddr);
+ 	cvmx_bootmem_init(octeon_bootinfo->phy_mem_desc_addr);
++	cvmx_bootmem_phy_list_save();
+ 
+ 	sysinfo = cvmx_sysinfo_get();
+ 	memset(sysinfo, 0, sizeof(*sysinfo));
+@@ -1152,7 +1154,6 @@ void __init plat_mem_setup(void)
+ 			add_memory_region(block_begin, block_size, BOOT_MEM_RAM);
+ 			total += block_size;
+ 		}
+-		goto mem_alloc_done;
+ 	}
+ 
+ 	if (mem_alloc_size > max_memory)
+@@ -1206,8 +1207,6 @@ void __init plat_mem_setup(void)
+ 	}
+ 	cvmx_bootmem_unlock();
+ 
+-mem_alloc_done:
+-
+ 	/*
+ 	 * Now that we've allocated the kernel memory it is safe to
+ 	 * free the reserved region. We free it here so that builtin
+diff --git a/arch/mips/include/asm/octeon/cvmx-bootmem.h b/arch/mips/include/asm/octeon/cvmx-bootmem.h
+index deef10f57c11..056a2c8c99be 100644
+--- a/arch/mips/include/asm/octeon/cvmx-bootmem.h
++++ b/arch/mips/include/asm/octeon/cvmx-bootmem.h
+@@ -508,6 +508,18 @@ void cvmx_bootmem_phy_named_block_print(void);
+  */
+ void cvmx_bootmem_phy_list_print(void);
+ 
++/**
++ * Saves the initial list of available memory,
++ * so that it can be restored for kexec.
++ */
++void cvmx_bootmem_phy_list_save(void);
++
++/**
++ * Restores the initial list of available memory
++ * that was saved by cvmx_bootmem_phy_list_save()
++ */
++	void cvmx_bootmem_phy_list_restore(void);
++
+ /**
+  * This function initializes the free memory list used by cvmx_bootmem.
+  * This must be called before any allocations can be done.
+-- 
+2.25.1
+

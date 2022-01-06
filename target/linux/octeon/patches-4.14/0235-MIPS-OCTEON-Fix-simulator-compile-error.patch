@@ -1,0 +1,27 @@
+From 92d163e490ac23500b76f68e04d78fb3e880ca3a Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@caviumnetworks.com>
+Date: Sat, 18 May 2019 14:41:53 +0200
+Subject: [PATCH 235/345] MIPS: OCTEON: Fix simulator compile error.
+
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/include/asm/octeon/octeon.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index e7811b78d4d3..ccf6cd5bf323 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -477,7 +477,7 @@ void octeon_mult_restore3_end(void);
+ void octeon_mult_restore2(void);
+ void octeon_mult_restore2_end(void);
+ 
+-#if CONFIG_OCTEON_FPA3
++#if IS_ENABLED(CONFIG_OCTEON_FPA3)
+ int octeon_fpa3_init(int node);
+ int octeon_fpa3_pool_init(int node, int pool_num, cvmx_fpa3_pool_t *pool,
+ 			  void **pool_stack, int num_ptrs);
+-- 
+2.25.1
+

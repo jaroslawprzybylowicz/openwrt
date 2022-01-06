@@ -1,0 +1,1513 @@
+From b2b91e70e014cf342bf0fedbf7c2af4e1967907a Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Fri, 7 Jun 2019 20:01:42 +0200
+Subject: [PATCH 317/345] EDAC:Octeon: Fixed EDAC support for OcteonII and
+ OcteonIII.
+
+This fix implements support for Octeon 3 LMC and L2C error handling.  In the
+case of single bit errors, the errors are corrected as well as reported.  In
+the case of double bit errors, errors are reported.
+
+EDAC:Octeon: Fix L2C and LMC EDAC support for Octeon II
+
+LMC: Use OcteonIII polling code for OcteonII model.
+     Invalidate L2C cache on SBE error.
+L2C: Handle Single/Double bit L2C ECC errors properly.
+
+Signed-off-by: Aaron Williams <aaron.williams@cavium.com>
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c       |  44 +-
+ arch/mips/include/asm/octeon/octeon.h |  13 +
+ drivers/edac/octeon_edac-l2c.c        | 395 +++++++++++---
+ drivers/edac/octeon_edac-lmc.c        | 739 +++++++++++++++++++-------
+ 4 files changed, 920 insertions(+), 271 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 2e6aa50df0ed..7e4e8f677c72 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -1429,7 +1429,9 @@ static int __init edac_devinit(void)
+ 	struct platform_device *dev;
+ 	int i, err = 0;
+ 	int num_lmc;
++	int num_tad;
+ 	char *name;
++	int node;
+ 
+ 	if (disable_octeon_edac_p)
+ 		return 0;
+@@ -1448,12 +1450,42 @@ static int __init edac_devinit(void)
+ 		((OCTEON_IS_MODEL(OCTEON_CN56XX)
+ 		  || OCTEON_IS_MODEL(OCTEON_CN73XX)
+ 		  || OCTEON_IS_MODEL(OCTEON_CNF75XX)) ? 2 : 1);
+-	for (i = 0; i < num_lmc; i++) {
+-		dev = platform_device_register_simple("octeon_lmc_edac",
+-						      i, NULL, 0);
+-		if (IS_ERR(dev)) {
+-			pr_err("Registration of octeon_lmc_edac %d failed!\n", i);
+-			err = PTR_ERR(dev);
++	num_tad = OCTEON_IS_MODEL(OCTEON_CN78XX) ? 8 :
++			(OCTEON_IS_MODEL(OCTEON_CN68XX)
++			 || (OCTEON_IS_OCTEON3()
++			     && !OCTEON_IS_MODEL(OCTEON_CN70XX))) ? 4 : 1;
++
++	for_each_online_node(node) {
++		for (i = 0; i < num_lmc; i++) {
++			struct octeon_edac_lmc_data lmc_data;
++
++			lmc_data.node = node;
++			lmc_data.lmc = i;
++			dev = platform_device_register_data(NULL,
++							    "octeon_lmc_edac",
++							    node * num_lmc + i,
++							    &lmc_data,
++							    sizeof(lmc_data));
++			if (IS_ERR(dev)) {
++				pr_err("Registation of octeon_lmc_edac %d failed!\n", i);
++				err = PTR_ERR(dev);
++			}
++		}
++		for (i = 0; i < num_tad; i++) {
++			struct octeon_edac_l2c_data l2c_data;
++
++			l2c_data.node = node;
++			l2c_data.tad = i;
++			dev = platform_device_register_data(NULL,
++							    "octeon_l2c_edac",
++							    node * num_tad + i,
++							    &l2c_data,
++							    sizeof(l2c_data));
++			if (IS_ERR(dev)) {
++				pr_err("Registration of octeon_l2c_edac %d:%d failed!\n",
++				       node, i);
++				err = PTR_ERR(dev);
++			}
+ 		}
+ 	}
+ 
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index ccf6cd5bf323..6f271fdbd353 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -299,6 +299,19 @@ struct octeon_ciu_chip_data {
+ 	int ciu_node; /* NUMA node number of the CIU */
+ 	int trigger_type;
+ };
++struct octeon_edac_lmc_data {
++	uint8_t node;		/** CPU node number */
++	uint8_t lmc;		/** LMC interface number on node */
++};
++
++struct edac_device_ctl_info;
++
++struct octeon_edac_l2c_data {
++	struct edac_device_ctl_info *ed;
++	struct platform_device *pdev;
++	uint8_t node;		/** CPU node number */
++	uint8_t tad;		/** L2C TAD number */
++};
+ 
+ extern void octeon_check_cpu_bist(void);
+ 
+diff --git a/drivers/edac/octeon_edac-l2c.c b/drivers/edac/octeon_edac-l2c.c
+index 398d82b696fb..77c72293ac19 100644
+--- a/drivers/edac/octeon_edac-l2c.c
++++ b/drivers/edac/octeon_edac-l2c.c
+@@ -15,11 +15,17 @@
+ #include <linux/edac.h>
+ 
+ #include <asm/octeon/cvmx.h>
++#include <asm/octeon/octeon.h>
+ 
+ #include "edac_module.h"
+ 
+ #define EDAC_MOD_STR "octeon-l2c"
+ 
++struct octeon_edac_l2c_pvt_info {
++	int num_tads;
++	int num_nodes;
++};
++
+ static void octeon_l2c_poll_oct1(struct edac_device_ctl_info *l2c)
+ {
+ 	union cvmx_l2t_err l2t_err, l2t_err_reset;
+@@ -62,6 +68,7 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
+ 	union cvmx_l2c_err_tdtx err_tdtx, err_tdtx_reset;
+ 	union cvmx_l2c_err_ttgx err_ttgx, err_ttgx_reset;
+ 	union cvmx_l2c_int_reg l2c_int_reg;
++	bool invalidate_cache_line_tdtx = false;
+ 	bool l2c_clear = false;
+ 	char buf1[64];
+ 	char buf2[80];
+@@ -115,18 +122,31 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
+ 
+ 	err_tdtx_reset.u64 = 0;
+ 	err_tdtx.u64 = cvmx_read_csr(CVMX_L2C_ERR_TDTX(tad));
+-	if (err_tdtx.s.dbe || err_tdtx.s.sbe ||
+-	    err_tdtx.s.vdbe || err_tdtx.s.vsbe)
++	if (err_tdtx.s.dbe || err_tdtx.s.sbe) {
+ 		snprintf(buf1, sizeof(buf1),
+ 			 "type:%d, syn:0x%x, way:%d",
+ 			 err_tdtx.s.type, err_tdtx.s.syn, err_tdtx.s.wayidx);
++		invalidate_cache_line_tdtx = true;
++	}
++
++	if (err_tdtx.s.vdbe || err_tdtx.s.vsbe) {
++		union cvmx_l2c_err_vbfx err_vbfx;
++		err_vbfx.u64 = cvmx_read_csr(CVMX_L2C_ERR_VBFX(tad));
++		snprintf(buf1, sizeof(buf1),
++			 "type:%d, syn:0x%x, way:%d, VBF error syndrome: 0x%x",
++			 err_tdtx.s.type, err_tdtx.s.syn, err_tdtx.s.wayidx,
++			 err_vbfx.s.vsyn);
++		invalidate_cache_line_tdtx = true;
++	}
+ 
+ 	if (err_tdtx.s.dbe) {
+ 		snprintf(buf2, sizeof(buf2),
+ 			 "L2D Double bit error (detected):%s", buf1);
+ 		err_tdtx_reset.s.dbe = 1;
+ 		edac_device_handle_ue(l2c, tad, 1, buf2);
++		panic("Uncorrectable L2 cache error detected!\n");
+ 	}
++
+ 	if (err_tdtx.s.sbe) {
+ 		snprintf(buf2, sizeof(buf2),
+ 			 "L2D Single bit error (corrected):%s", buf1);
+@@ -138,6 +158,7 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
+ 			 "VBF Double bit error (detected):%s", buf1);
+ 		err_tdtx_reset.s.vdbe = 1;
+ 		edac_device_handle_ue(l2c, tad, 1, buf2);
++		panic("Uncorrectable L2 cache error detected!\n");
+ 	}
+ 	if (err_tdtx.s.vsbe) {
+ 		snprintf(buf2, sizeof(buf2),
+@@ -145,8 +166,14 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
+ 		err_tdtx_reset.s.vsbe = 1;
+ 		edac_device_handle_ce(l2c, tad, 1, buf2);
+ 	}
+-	if (err_tdtx_reset.u64)
++	if (err_tdtx_reset.u64) {
++		if (invalidate_cache_line_tdtx) {
++			/* Write back and invalidate the cache line */
++			CVMX_SYNCW;
++			CVMX_CACHE_WBIL2I((err_tdtx.s.wayidx) | (1ULL << 63), 0);
++		}
+ 		cvmx_write_csr(CVMX_L2C_ERR_TDTX(tad), err_tdtx_reset.u64);
++	}
+ 
+ 	err_ttgx_reset.u64 = 0;
+ 	err_ttgx.u64 = cvmx_read_csr(CVMX_L2C_ERR_TTGX(tad));
+@@ -159,7 +186,6 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
+ 	if (err_ttgx.s.dbe) {
+ 		snprintf(buf2, sizeof(buf2),
+ 			 "Tag Double bit error (detected):%s", buf1);
+-		err_ttgx_reset.s.dbe = 1;
+ 		edac_device_handle_ue(l2c, tad, 0, buf2);
+ 	}
+ 	if (err_ttgx.s.sbe) {
+@@ -167,6 +193,9 @@ static void _octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c, int tad)
+ 			 "Tag Single bit error (corrected):%s", buf1);
+ 		err_ttgx_reset.s.sbe = 1;
+ 		edac_device_handle_ce(l2c, tad, 0, buf2);
++		/* Write back and invalidate the cache line */
++		CVMX_SYNCW;
++		CVMX_CACHE_WBIL2I((err_tdtx.s.wayidx) | (1ULL << 63), 0);
+ 	}
+ 	if (err_ttgx_reset.u64)
+ 		cvmx_write_csr(CVMX_L2C_ERR_TTGX(tad), err_ttgx_reset.u64);
+@@ -179,39 +208,218 @@ static void octeon_l2c_poll_oct2(struct edac_device_ctl_info *l2c)
+ 		_octeon_l2c_poll_oct2(l2c, i);
+ }
+ 
+-static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
++/**
++ * When a L2 cache single-bit ECC error occurs in the data this function
++ * calculates the proper cache index and flushes and invalidates the cache
++ * line.
++ *
++ * @param	node	node where L2 ECC error occurred
++ * @param	tad	tad number where L2 ECC error occurred
++ * @return	cache index flushed
++ */
++static u64 octeon_flush_l2c_l2d_ecc_error(int node, int tad)
++{
++	u64 cindex;
++
++	cindex = cvmx_l2c_tqdl2d_to_index_7xxx(node, tad);
++	cindex = CVMX_ADD_IO_SEG(cindex);
++	/* Write back and invalidate the cache line */
++	CVMX_SYNCW;
++	CVMX_CACHE_WBIL2I(cindex, 0);
++	return cindex;
++}
++
++/**
++ * Processes and fixes (single bit) L2 data cache errors
++ *
++ * @param	l2c	edac device
++ * @param	node	Octeon CPU node
++ * @param	tad	TAD number
++ */
++static void octeon3_l2c_process_l2d_ecc_error(struct edac_device_ctl_info *l2c,
++					      int node, int tad)
+ {
+ 	union cvmx_l2c_tqdx_err tqdx_err;
++	union cvmx_l2c_ecc_ctl ecc_ctl;
++	union cvmx_l2c_tadx_int l2c_reset;
++	u64 cindex;
++	char msg[256];
++	bool dbe = false;
++
++	/* Check for artificial L2C ECC errors */
++	ecc_ctl.u64 = cvmx_read_csr_node(node, CVMX_L2C_ECC_CTL);
++	switch (ecc_ctl.s.l2dflip) {
++	case 0:
++		break;
++	case 1:
++		/* Single-bit L2C ECC error generated artificially on ECC[0] */
++		dev_info(l2c->dev,
++			 "Detected artificially generated single-bit L2C error on ECC[0]\n");
++		break;
++	case 2:
++		/* Single-bit L2C ECC error generated artificially on ECC[1] */
++		dev_info(l2c->dev,
++			 "Detected artificially generated single-bit L2C error on ECC[1]\n");
++		break;
++	case 3:
++		/* Double-bit L2C ECC error generated artificially */
++		dev_info(l2c->dev,
++			 "Detected artificially generated double-bit L2C error\n");
++		break;
++	}
++	/* Clear artificially generated errors */
++	if (ecc_ctl.s.l2dflip) {
++		ecc_ctl.s.l2dflip = 0;
++		cvmx_write_csr_node(node, CVMX_L2C_ECC_CTL, ecc_ctl.u64);
++	}
++
++	tqdx_err.u64 = cvmx_read_csr_node(node, CVMX_L2C_TQDX_ERR(tad));
++	/* FBF = fill buffer
++	 * SBF = store buffer
++	 * VBF = victim buffer
++	 * LFB + VAB = in-flight address buffers
++	 */
++	if (tqdx_err.s.l2ddbe) {
++		dbe = true;
++	} else if (!tqdx_err.s.l2dsbe) {
++		/* Unknown L2 cache error detected */
++		panic("Unknown l2c error occurred: l2c_tqd%d_err: 0x%llx\n",
++		      tad, tqdx_err.u64);
++	}
++
++	cindex = octeon_flush_l2c_l2d_ecc_error(node, tad);
++	snprintf(msg, sizeof(msg),
++		 "%s: tad: %d, l2idx: 0x%x, qdhalf: %d, qdnum: 0x%x, syndrome: 0x%x",
++		 l2c->ctl_name, tad, tqdx_err.s.l2didx, tqdx_err.s.qdhlf,
++		 tqdx_err.s.qdnum, tqdx_err.s.syn);
++	if (!dbe) {
++		edac_device_handle_ce(l2c, tad, 1, msg);
++		l2c_reset.u64 = 0;
++		l2c_reset.s.l2dsbe = 1;
++		cvmx_write_csr_node(node, CVMX_L2C_TADX_INT(tad),
++				    l2c_reset.u64);
++	} else {
++		edac_device_handle_ue(l2c, tad, 1, msg);
++		panic("Uncorrectable L2 cache error detected!\n");
++	}
++}
++
++static void octeon3_l2c_process_tag_ecc_error(struct edac_device_ctl_info *l2c,
++					      int node, int tad, bool remote)
++{
+ 	union cvmx_l2c_ttgx_err ttgx_err;
++	union cvmx_l2c_rtgx_err rtgx_err;
++	union cvmx_l2c_ecc_ctl ecc_ctl;
++	u64 cindex;
++	char msg[128];
++	int way;
++	int index;
++	int syn;
++
++	if (remote && OCTEON_IS_MODEL(OCTEON_CN78XX_PASS1_X)) {
++		edac_device_handle_ue(l2c, tad, 0,
++				      "Remote TAG L2C errors not supported by CN78XX pass 1.X");
++		return;
++	}
++
++	ecc_ctl.u64 = cvmx_read_csr_node(node, CVMX_L2C_ECC_CTL);
++	switch (ecc_ctl.s.l2tflip) {
++	case 0:
++		break;
++	case 1:
++	case 2:
++	case 3:
++		/* We could print a message since this is an artificially
++		 * generated error.
++		 */
++		cvmx_write_csr_node(node, CVMX_L2C_ECC_CTL, 0);
++	}
++	if (remote)
++		rtgx_err.u64 = cvmx_read_csr_node(node, CVMX_L2C_RTGX_ERR(tad));
++	else
++		rtgx_err.u64 = cvmx_read_csr_node(node, CVMX_L2C_TTGX_ERR(tad));
++
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
++		if (remote) {
++			way = rtgx_err.s.way;
++			index = rtgx_err.s.l2idx;
++			syn = rtgx_err.s.syn;
++		} else {
++			way = ttgx_err.cn78xx.way;
++			index = ttgx_err.cn78xx.l2idx;
++			syn = ttgx_err.cn78xx.syn;
++		}
++	} else if (OCTEON_IS_MODEL(OCTEON_CN70XX)) {
++		way = ttgx_err.cn70xx.way;
++		index = ttgx_err.cn70xx.l2idx;
++		syn = ttgx_err.cn70xx.syn;
++	} else {
++		way = ttgx_err.cn73xx.way;
++		index = ttgx_err.cn73xx.l2idx;
++		syn = ttgx_err.cn73xx.syn;
++	}
++
++	snprintf(msg, sizeof(msg),
++		 "L2D: %stag way: 0x%x, index: 0x%x, syn: 0x%x",
++		 remote ? "remote " : "", way, index, syn);
++
++	if ((remote && rtgx_err.s.rtgdbe) || (!remote && ttgx_err.s.tagdbe)) {
++		edac_device_handle_ue(l2c, tad, 1, msg);
++	} else if (!remote && ttgx_err.s.noway) {
++		edac_device_handle_ue(l2c, tad, 1, "L2D: no way!");
++	} else {
++		edac_device_handle_ce(l2c, tad, 1, msg);
++		cindex = cvmx_l2c_ttgx_to_index_7xxx(node, tad, remote);
++		cindex = CVMX_ADD_IO_SEG(cindex);
++		CVMX_SYNCW;
++		CVMX_CACHE_WBIL2I(cindex, 0);
++		CVMX_SYNC;
++	}
++}
++
++static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c,
++				  int node, int tad)
++{
++	char buf1[64];
++	char buf2[80];
++	union cvmx_l2c_tqdx_err tqdx_err;
++	union cvmx_l2c_ttgx_err ttgx_err;
++	union cvmx_l2c_rtgx_err rtgx_err;
+ 	union cvmx_l2c_tadx_err l2c_err;
+ 	union cvmx_l2c_tadx_int l2c_reset;
+ 	int way, l2idx;
+ 
+-	char buf1[64];
+-	char buf2[80];
++	tqdx_err.u64 = cvmx_read_csr_node(node, CVMX_L2C_TQDX_ERR(tad));
++	ttgx_err.u64 = cvmx_read_csr(CVMX_L2C_TTGX_ERR(tad));
++	rtgx_err.u64 = OCTEON_IS_MODEL(OCTEON_CN78XX) ?
++		cvmx_read_csr_node(node, CVMX_L2C_RTGX_ERR(tad)) : 0;
++
++	/* The most likely case is that there is no error so bail out. */
++	if (likely(!tqdx_err.s.fbfsbe && !tqdx_err.s.sbfsbe &&
++		   !tqdx_err.s.l2dsbe && !tqdx_err.s.fbfdbe &&
++		   !tqdx_err.s.sbfdbe && !tqdx_err.s.l2ddbe &&
++		   !ttgx_err.s.tagsbe && !ttgx_err.s.tagdbe &&
++		   !ttgx_err.s.noway && !rtgx_err.s.rtgsbe &&
++		   !rtgx_err.s.rtgdbe))
++		return;
++
++	if (tqdx_err.s.l2dsbe || tqdx_err.s.l2ddbe) {
++		octeon3_l2c_process_l2d_ecc_error(l2c, node, tad);
++		return;
++	}
++
++	if (tqdx_err.s.sbfsbe || tqdx_err.s.fbfsbe)
++		/* Hardware automatically handles this so ignore it */
++		return;
+ 
+ 	l2c_reset.u64 = 0;
+ 
+-	tqdx_err.u64 = cvmx_read_csr(CVMX_L2C_TQDX_ERR(tad));
+-	if (tqdx_err.s.l2ddbe || tqdx_err.s.l2dsbe ||
+-	    tqdx_err.s.sbfdbe || tqdx_err.s.sbfsbe ||
++	if (tqdx_err.s.sbfdbe || tqdx_err.s.sbfsbe ||
+ 	    tqdx_err.s.fbfdbe || tqdx_err.s.fbfsbe)
+ 		snprintf(buf1, sizeof(buf1),
+ 			 "L2D: syn:0x%x, quad:%d, index:%d",
+ 			 tqdx_err.s.syn, tqdx_err.s.qdnum, tqdx_err.s.l2didx);
+ 
+-	if (tqdx_err.s.l2ddbe) {
+-		snprintf(buf2, sizeof(buf2),
+-			 "L2D Double bit error (detected):%s", buf1);
+-		l2c_reset.cn70xx.l2ddbe = 1;
+-		edac_device_handle_ue(l2c, tad, 1, buf2);
+-	}
+-	if (tqdx_err.s.l2dsbe) {
+-		snprintf(buf2, sizeof(buf2),
+-			 "L2D Single bit error (corrected):%s", buf1);
+-		l2c_reset.cn70xx.l2dsbe = 1;
+-		edac_device_handle_ce(l2c, tad, 1, buf2);
+-	}
+ 	if (tqdx_err.s.sbfdbe) {
+ 		snprintf(buf2, sizeof(buf2),
+ 			 "SBF Double bit error (detected):%s", buf1);
+@@ -237,7 +445,6 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ 		edac_device_handle_ce(l2c, tad, 1, buf2);
+ 	}
+ 
+-	ttgx_err.u64 = cvmx_read_csr(CVMX_L2C_TTGX_ERR(tad));
+ 	if (OCTEON_IS_MODEL(OCTEON_CN70XX)) {
+ 		way = ttgx_err.cn70xx.way;
+ 		l2idx = ttgx_err.cn70xx.l2idx;
+@@ -249,22 +456,16 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ 		l2idx = ttgx_err.cn73xx.l2idx;
+ 	}
+ 
+-	if (ttgx_err.s.tagdbe || ttgx_err.s.tagsbe)
+-		snprintf(buf1, sizeof(buf1),
+-			 "tag type error: syn:0x%x, way:%d, index:%d",
+-			 ttgx_err.s.syn, way, l2idx);
+-
+-	if (ttgx_err.s.tagdbe) {
+-		snprintf(buf2, sizeof(buf2),
+-			 "Tag Double bit error (detected):%s", buf1);
+-		l2c_reset.cn70xx.tagdbe = 1;
+-		edac_device_handle_ue(l2c, tad, 0, buf2);
++	if (ttgx_err.s.tagdbe || ttgx_err.s.tagsbe) {
++		/* Handle tag errors */
++		octeon3_l2c_process_tag_ecc_error(l2c, node, tad, false);
++		return;
+ 	}
+-	if (ttgx_err.s.tagsbe) {
+-		snprintf(buf2, sizeof(buf2),
+-			 "Tag Single bit error (corrected):%s", buf1);
+-		l2c_reset.cn70xx.tagsbe = 1;
+-		edac_device_handle_ce(l2c, tad, 0, buf2);
++
++	/* handle remote tag errors */
++	if (rtgx_err.s.rtgsbe || rtgx_err.s.rtgdbe) {
++		octeon3_l2c_process_tag_ecc_error(l2c, node, tad, true);
++		return;
+ 	}
+ 
+ 	l2c_err.u64 = cvmx_read_csr(CVMX_L2C_TADX_ERR(tad));
+@@ -272,13 +473,13 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ 		snprintf(buf1, sizeof(buf1),
+ 			"Read reference past L2C_BIG_CTL[MAXDRAM] occurred:");
+ 		l2c_reset.cn70xx.bigrd = true;
+-		edac_device_handle_ce(l2c, tad, 0, buf1);
++		edac_device_handle_ue(l2c, tad, 0, buf1);
+ 	}
+ 	if (l2c_err.s.bigwr) {
+ 		snprintf(buf1, sizeof(buf1),
+ 			"Write reference past L2C_BIG_CTL[MAXDRAM] occurred:");
+ 		l2c_reset.cn70xx.bigwr = true;
+-		edac_device_handle_ce(l2c, tad, 0, buf1);
++		edac_device_handle_ue(l2c, tad, 0, buf1);
+ 	}
+ 
+ 	if (l2c_reset.u64)
+@@ -287,60 +488,84 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ 
+ static void octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c)
+ {
++	struct octeon_edac_l2c_pvt_info *l2c_pvt = l2c->pvt_info;
+ 	int i;
++
+ 	for (i = 0; i < l2c->nr_instances; i++)
+-		_octeon_l2c_poll_oct3(l2c, i);
++		_octeon_l2c_poll_oct3(l2c, i / l2c_pvt->num_tads,
++				      i % l2c_pvt->num_tads);
+ }
+ 
+ static int octeon_l2c_probe(struct platform_device *pdev)
+ {
+ 	struct edac_device_ctl_info *l2c;
+-
+-	int num_tads = OCTEON_IS_MODEL(OCTEON_CN68XX) ? 4 : 1;
+-
+-	/* 'Tags' are block 0, 'Data' is block 1*/
+-	l2c = edac_device_alloc_ctl_info(0, "l2c", num_tads, "l2c", 2, 0,
+-					 NULL, 0, edac_device_alloc_index());
+-	if (!l2c)
+-		return -ENOMEM;
+-
+-	l2c->dev = &pdev->dev;
+-	platform_set_drvdata(pdev, l2c);
+-	l2c->dev_name = dev_name(&pdev->dev);
+-
+-	l2c->mod_name = "octeon-l2c";
+-	l2c->ctl_name = "octeon_l2c_err";
+-
+-
+-	if (OCTEON_IS_OCTEON1PLUS()) {
+-		union cvmx_l2t_err l2t_err;
+-		union cvmx_l2d_err l2d_err;
+-
+-		l2t_err.u64 = cvmx_read_csr(CVMX_L2T_ERR);
+-		l2t_err.s.sec_intena = 0;	/* We poll */
+-		l2t_err.s.ded_intena = 0;
+-		cvmx_write_csr(CVMX_L2T_ERR, l2t_err.u64);
+-
+-		l2d_err.u64 = cvmx_read_csr(CVMX_L2D_ERR);
+-		l2d_err.s.sec_intena = 0;	/* We poll */
+-		l2d_err.s.ded_intena = 0;
+-		cvmx_write_csr(CVMX_L2T_ERR, l2d_err.u64);
+-
+-		l2c->edac_check = octeon_l2c_poll_oct1;
+-	} else if (OCTEON_IS_OCTEON2()) {
+-		/* OCTEON II */
+-		l2c->edac_check = octeon_l2c_poll_oct2;
+-	} else {
+-		/* OCTEON III */
+-		l2c->edac_check = octeon_l2c_poll_oct3;
+-	}
+-
+-	if (edac_device_add_device(l2c) > 0) {
+-		pr_err("%s: edac_device_add_device() failed\n", __func__);
+-		goto err;
++	int num_tads;
++	struct octeon_edac_l2c_data *l2c_data;
++	struct octeon_edac_l2c_pvt_info *l2c_priv;
++
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX))
++		num_tads = 8;
++	else if ((!OCTEON_IS_MODEL(OCTEON_CN70XX) && OCTEON_IS_OCTEON3())
++		 || OCTEON_IS_MODEL(OCTEON_CN68XX))
++		num_tads = 4;
++	else
++		num_tads = 1;
++
++	/* This function gets called multiple times, first globally then again
++	 * for all of the TADs.  We don't need to do anything in the latter
++	 * cases.
++	 */
++	l2c_data = dev_get_platdata(&pdev->dev);
++	if (!l2c_data) {
++		l2c = edac_device_alloc_ctl_info(sizeof(*l2c_priv), "l2ctad",
++						 num_tads * num_online_nodes(),
++						 "l2c", 2, 0, NULL, 0,
++						 edac_device_alloc_index());
++		if (!l2c)
++			return -ENOMEM;
++
++		l2c->dev = &pdev->dev;
++		platform_set_drvdata(pdev, l2c);
++
++		l2c->dev_name = dev_name(&pdev->dev);
++		l2c->mod_name = "octeon-l2c";
++		l2c->ctl_name = "octeon_l2c_err";
++		l2c->panic_on_ue = true;
++		l2c_priv = l2c->pvt_info;
++		l2c_priv->num_tads = num_tads;
++		l2c_priv->num_nodes = num_online_nodes();
++
++		if (OCTEON_IS_OCTEON1PLUS()) {
++			union cvmx_l2t_err l2t_err;
++			union cvmx_l2d_err l2d_err;
++
++			l2t_err.u64 = cvmx_read_csr(CVMX_L2T_ERR);
++			l2t_err.s.sec_intena = 0;	/* We poll */
++			l2t_err.s.ded_intena = 0;
++			cvmx_write_csr(CVMX_L2T_ERR, l2t_err.u64);
++
++			l2d_err.u64 = cvmx_read_csr(CVMX_L2D_ERR);
++			l2d_err.s.sec_intena = 0;	/* We poll */
++			l2d_err.s.ded_intena = 0;
++			cvmx_write_csr(CVMX_L2T_ERR, l2d_err.u64);
++
++			l2c->edac_check = octeon_l2c_poll_oct1;
++		} else if (current_cpu_type() == CPU_CAVIUM_OCTEON2) {
++			/* OCTEON II */
++			l2c->edac_check = octeon_l2c_poll_oct2;
++		} else {
++			/* OCTEON III */
++			l2c->edac_check = octeon_l2c_poll_oct3;
++		}
++
++		if (edac_device_add_device(l2c) > 0) {
++			dev_err(&pdev->dev,
++				"%s: edac_device_add_device() failed\n",
++				__func__);
++			goto err;
++		}
+ 	}
+ 
+-
+ 	return 0;
+ 
+ err:
+diff --git a/drivers/edac/octeon_edac-lmc.c b/drivers/edac/octeon_edac-lmc.c
+index d2d71fd47d5c..ce809a7bcee6 100644
+--- a/drivers/edac/octeon_edac-lmc.c
++++ b/drivers/edac/octeon_edac-lmc.c
+@@ -3,38 +3,368 @@
+  * License.  See the file "COPYING" in the main directory of this archive
+  * for more details.
+  *
+- * Copyright (C) 2009 Wind River Systems,
++ * Copyright (C) 2009-2017 Wind River Systems,
+  *   written by Ralf Baechle <ralf@linux-mips.org>
+- *
+- * Copyright (c) 2013 by Cisco Systems, Inc.
+- * All rights reserved.
+  */
+ #include <linux/module.h>
+ #include <linux/init.h>
+ #include <linux/slab.h>
+ #include <linux/io.h>
+ #include <linux/edac.h>
+-#include <linux/ctype.h>
++#include <linux/nodemask.h>
++#include <linux/interrupt.h>
++#include <linux/string.h>
++#include <linux/stop_machine.h>
++#include <linux/sizes.h>
++#include <linux/atomic.h>
++#include <linux/delay.h>
++#include <linux/circ_buf.h>
++
++#include <asm/page.h>
+ 
+ #include <asm/octeon/octeon.h>
+ #include <asm/octeon/cvmx-lmcx-defs.h>
++#include <asm/octeon/cvmx-atomic.h>
++
+ 
+ #include "edac_module.h"
+ 
+-#define OCTEON_MAX_MC 4
++#define OCTEON_MAX_MC			8
++#define OCTEON_MAX_SOCKETS		2	/* Nodes */
++#define MAX_CHANNELS_PER_BRANCH		2
++#define MAX_SLOTS			4
++
++#define _Db(x) (x)		/** Data Bit */
++#define _Ec(x) (0x100+x)	/** ECC Bit */
++#define _Ad(x) (0x200+x)	/** Address Bit */
++#define _Bu(x) (0x400+x)	/** Burst */
++#define _Un()  (-1)		/** Unused */
++
++/** Use ECC Code as index to lookup corrected bit */
++static const short lmc_syndrome_bits[256] = {
++	/* 00: */ _Un(),   _Ec(0),  _Ec(1),  _Un(),
++	/* 04: */ _Ec(2),  _Un(),   _Un(),   _Un(),
++	/* 08: */ _Ec(3),  _Un(),   _Un(),   _Db(17),
++	/* 0C: */ _Un(),   _Un(),   _Db(16), _Un(),
++	/* 10: */ _Ec(4),  _Un(),   _Un(),   _Db(18),
++	/* 14: */ _Un(),   _Db(19), _Db(20), _Un(),
++	/* 18: */ _Un(),   _Db(21), _Db(22), _Un(),
++	/* 1C: */ _Db(23), _Un(),   _Un(),   _Un(),
++	/* 20: */ _Ec(5),  _Un(),   _Un(),   _Db(8),
++	/* 24: */ _Un(),   _Db(9),  _Db(10), _Un(),
++	/* 28: */ _Un(),   _Db(11), _Db(12), _Un(),
++	/* 2C: */ _Db(13), _Un(),   _Un(),   _Un(),
++	/* 30: */ _Un(),   _Db(14), _Un(),   _Un(),
++	/* 34: */ _Db(15), _Un(),   _Un(),   _Un(),
++	/* 38: */ _Un(),   _Un(),   _Un(),   _Un(),
++	/* 3C: */ _Un(),   _Un(),   _Ad(34), _Un(),
++	/* 40: */ _Ec(6),  _Un(),   _Un(),   _Un(),
++	/* 44: */ _Un(),   _Ad(7),  _Ad(8),  _Un(),
++	/* 48: */ _Un(),   _Ad(9),  _Db(33), _Un(),
++	/* 4C: */ _Ad(10), _Un(),   _Un(),   _Db(32),
++	/* 50: */ _Un(),   _Ad(11), _Db(34), _Un(),
++	/* 54: */ _Db(35), _Un(),   _Un(),   _Db(36),
++	/* 58: */ _Db(37), _Un(),   _Un(),   _Db(38),
++	/* 5C: */ _Un(),   _Db(39), _Ad(12), _Un(),
++	/* 60: */ _Un(),   _Ad(13), _Db(56), _Un(),
++	/* 64: */ _Db(57), _Un(),   _Un(),   _Db(58),
++	/* 68: */ _Db(59), _Un(),   _Un(),   _Db(60),
++	/* 6C: */ _Un(),   _Db(61), _Ad(14), _Un(),
++	/* 70: */ _Db(62), _Un(),   _Un(),   _Ad(15),
++	/* 74: */ _Un(),   _Db(63), _Ad(16), _Un(),
++	/* 78: */ _Un(),   _Ad(17), _Ad(18), _Un(),
++	/* 7C: */ _Ad(19), _Un(),   _Ad(20), _Un(),
++	/* 80: */ _Ec(7),  _Un(),   _Un(),   _Ad(21),
++	/* 84: */ _Un(),   _Ad(22), _Ad(23), _Un(),
++	/* 88: */ _Un(),   _Ad(24), _Db(49), _Un(),
++	/* 8C: */ _Ad(25), _Un(),   _Un(),   _Db(48),
++	/* 90: */ _Un(),   _Ad(26), _Db(50), _Un(),
++	/* 94: */ _Db(51), _Un(),   _Un(),   _Db(52),
++	/* 98: */ _Db(53), _Un(),   _Un(),   _Db(54),
++	/* 9C: */ _Un(),   _Db(55), _Ad(27), _Un(),
++	/* A0: */ _Un(),   _Ad(28), _Db(40), _Un(),
++	/* A4: */ _Db(41), _Un(),   _Un(),   _Db(42),
++	/* A8: */ _Db(43), _Un(),   _Un(),   _Db(44),
++	/* 8C: */ _Un(),   _Db(45), _Ad(29), _Un(),
++	/* B0: */ _Db(46), _Un(),   _Un(),   _Ad(30),
++	/* B4: */ _Un(),   _Db(47), _Ad(31), _Un(),
++	/* B8: */ _Un(),   _Ad(32), _Ad(33), _Un(),
++	/* BC: */ _Un(),   _Un(),   _Un(),   _Un(),
++	/* C0: */ _Un(),   _Un(),   _Un(),   _Un(),
++	/* C4: */ _Un(),   _Un(),   _Un(),   _Un(),
++	/* C8: */ _Un(),   _Un(),   _Un(),   _Db(1),
++	/* CC: */ _Un(),   _Un(),   _Db(0),  _Un(),
++	/* D0: */ _Un(),   _Un(),   _Un(),   _Db(2),
++	/* D4: */ _Un(),   _Db(3),  _Db(4),  _Un(),
++	/* D8: */ _Un(),   _Db(5),  _Db(6),  _Un(),
++	/* DC: */ _Db(7),  _Un(),   _Un(),   _Un(),
++	/* E0: */ _Un(),   _Un(),   _Un(),   _Db(24),
++	/* E4: */ _Un(),   _Db(25), _Db(26), _Un(),
++	/* E8: */ _Un(),   _Db(27), _Db(28), _Un(),
++	/* EC: */ _Db(29), _Un(),   _Un(),   _Un(),
++	/* F0: */ _Un(),   _Db(30), _Un(),   _Un(),
++	/* F4: */ _Db(31), _Un(),   _Un(),   _Un(),
++	/* F8: */ _Un(),   _Un(),   _Un(),   _Un(),
++	/* FC: */ _Un(),   _Un(),   _Un(),   _Un()
++};
++
++#define RING_ENTRIES			8
++#define	MAX_SYNDROME_REGS		4
+ 
+-#define to_mci(k) container_of(k, struct mem_ctl_info, dev)
++struct debugfs_entry {
++	const char *name;
++	umode_t mode;
++	const struct file_operations fops;
++};
+ 
+-struct octeon_lmc_pvt {
+-	unsigned long inject;
+-	unsigned long error_type;
+-	unsigned long dimm;
+-	unsigned long rank;
+-	unsigned long bank;
+-	unsigned long row;
+-	unsigned long col;
++struct lmc_err_ctx {
++	u64 reg_int;
++	u64 reg_fadr;
++	u64 reg_nxm_fadr;
++	u64 reg_scram_fadr;
++	u64 reg_ecc_synd;
+ };
+ 
++struct octeon_lmc {
++	int lmc;			/** LMC number */
++
++	atomic_t ecc_int;
++	u64 mask0;
++	u64 mask2;
++	u64 parity_test;
++	u64 node;
++	int xbits;
++	int bank_width;
++	int pbank_lsb;
++	int dimm_lsb;
++	int rank_lsb;
++	int row_lsb;
++	int col_hi_lsb;
++	int xor_bank;
++	int l2c_alias;
++
++	struct page *mem;
++	struct lmc_err_ctx err_ctx[RING_ENTRIES];
++	unsigned long ring_head;
++	unsigned long ring_tail;
++};
++
++/* NOTE: remove this after upgrading to a newer kernel */
++#ifndef VERIFY_OCTAL_PERMISSIONS
++/* Permissions on a sysfs file: you didn't miss the 0 prefix did you? */
++#define VERIFY_OCTAL_PERMISSIONS(perms)                                       \
++	(BUILD_BUG_ON_ZERO((perms) < 0) +                                     \
++	 BUILD_BUG_ON_ZERO((perms) > 0777) +                                  \
++	 /* USER_READABLE >= GROUP_READABLE >= OTHER_READABLE */              \
++	 BUILD_BUG_ON_ZERO((((perms) >> 6) & 4) < (((perms) >> 3) & 4)) +     \
++	 BUILD_BUG_ON_ZERO((((perms) >> 3) & 4) < ((perms) & 4)) +            \
++	 /* USER_WRITABLE >= GROUP_WRITABLE */                                \
++	 BUILD_BUG_ON_ZERO((((perms) >> 6) & 2) < (((perms) >> 3) & 2)) +     \
++	 /* OTHER_WRITABLE?  Generally considered a bad idea. */              \
++	 BUILD_BUG_ON_ZERO((perms) & 2) +                                     \
++	 (perms))
++#endif
++
++#define ring_pos(pos, size) ((pos) & (size - 1))
++
++#define DEBUGFS_STRUCT(_name, _mode, _write, _read)			    \
++static struct debugfs_entry debugfs_##_name = {				    \
++	.name = __stringify(_name),					    \
++	.mode = VERIFY_OCTAL_PERMISSIONS(_mode),			    \
++	.fops = {							    \
++		.open = simple_open,					    \
++		.write = _write,					    \
++		.read  = _read,						    \
++		.llseek = generic_file_llseek,				    \
++	},								    \
++}
++
++#define DEBUGFS_FIELD_ATTR(_type, _field)				    \
++static ssize_t octeon_##_type##_##_field##_read(struct file *file,	    \
++					     char __user *data,		    \
++					     size_t count, loff_t *ppos)    \
++{									    \
++	struct octeon_##_type *pdata = file->private_data;		    \
++	char buf[20];							    \
++									    \
++	snprintf(buf, count, "0x%016llx", pdata->_field);		    \
++	return simple_read_from_buffer(data, count, ppos,		    \
++				       buf, sizeof(buf));		    \
++}									    \
++									    \
++static ssize_t octeon_##_type##_##_field##_write(struct file *file,	    \
++					     const char __user *data,	    \
++					     size_t count, loff_t *ppos)    \
++{									    \
++	struct octeon_##_type *pdata = file->private_data;		    \
++	int res;							    \
++									    \
++	res = kstrtoull_from_user(data, count, 0, &pdata->_field);	    \
++									    \
++	return res ? res : count;					    \
++}									    \
++									    \
++DEBUGFS_STRUCT(_field, 0600,						    \
++	       octeon_##_type##_##_field##_write,			    \
++	       octeon_##_type##_##_field##_read)			    \
++
++#define DEBUGFS_REG_ATTR(_type, _name, _reg)				    \
++static ssize_t octeon_##_type##_##_name##_read(struct file *file,	    \
++					    char __user *data,		    \
++					    size_t count, loff_t *ppos)	    \
++{									    \
++	struct octeon_##_type *pdata = file->private_data;		    \
++	char buf[20];							    \
++									    \
++	sprintf(buf, "0x%016llx", readq(pdata->regs + _reg));		    \
++	return simple_read_from_buffer(data, count, ppos,		    \
++				       buf, sizeof(buf));		    \
++}									    \
++									    \
++static ssize_t octeon_##_type##_##_name##_write(struct file *file,	    \
++					    const char __user *data,	    \
++					    size_t count, loff_t *ppos)     \
++{									    \
++	struct octeon_##_type *pdata = file->private_data;		    \
++	u64 val;							    \
++	int res;							    \
++									    \
++	res = kstrtoull_from_user(data, count, 0, &val);		    \
++									    \
++	if (!res) {							    \
++		writeq(val, pdata->regs + _reg);			    \
++		res = count;						    \
++	}								    \
++									    \
++	return res;							    \
++}									    \
++									    \
++DEBUGFS_STRUCT(_name, 0600,						    \
++	       octeon_##_type##_##_name##_write,			    \
++	       octeon_##_type##_##_name##_read)
++
++#define LMC_DEBUGFS_ENT(_field)	DEBUGFS_FIELD_ATTR(lmc, _field)
++
++static inline unsigned long get_bits(unsigned long data, int pos, int width)
++{
++	return (data >> pos) & ((1 << width) - 1);
++}
++
++#define TEST_PATTERN	0xa5
++
++static int inject_lmc_ecc_fn(void *arg)
++{
++	struct octeon_lmc *lmc = arg;
++	uintptr_t addr, phys;
++	unsigned int cline_size = cache_line_size();
++	const unsigned int lines = PAGE_SIZE / cline_size;
++	unsigned int i, cl_idx;
++
++	addr = (uintptr_t)page_address(lmc->mem);
++	phys = (uintptr_t)page_to_phys(lmc->mem);
++
++	cl_idx = (phys & 0x7f) >> 4;
++	lmc->parity_test &= ~(7ULL << 8);
++	lmc->parity_test |= (cl_idx << 8);
++
++	barrier();
++	CVMX_SYNCW;
++
++	cvmx_write_csr_node(lmc->node, CVMX_LMCX_CHAR_MASK0(lmc->lmc),
++			    lmc->mask0);
++	cvmx_write_csr_node(lmc->node, CVMX_LMCX_CHAR_MASK2(lmc->lmc),
++			    lmc->mask2);
++	cvmx_write_csr_node(lmc->node, CVMX_LMCX_ECC_PARITY_TEST(lmc->lmc),
++			    lmc->parity_test);
++	CVMX_SYNCW;
++
++	for (i = 0; i < lines; i++) {
++		memset((void *)addr, TEST_PATTERN, cline_size);
++		CVMX_SYNCW;
++		CVMX_CACHE_L2HWB(addr, 0);
++		barrier();
++	}
++	cvmx_write_csr_node(lmc->node, CVMX_LMCX_CHAR_MASK0(lmc->lmc), 0);
++	cvmx_write_csr_node(lmc->node, CVMX_LMCX_CHAR_MASK2(lmc->lmc), 0);
++	cvmx_write_csr_node(lmc->node, CVMX_LMCX_ECC_PARITY_TEST(lmc->lmc), 0);
++	CVMX_SYNCW;
++	return 0;
++}
++
++static ssize_t octeon_lmc_inject_ecc_write(struct file *file,
++					   const char __user *data,
++					   size_t count, loff_t *ppos)
++{
++	struct octeon_lmc *lmc = file->private_data;
++
++	unsigned int cline_size = cache_line_size();
++	u8 tmp[cline_size];
++	void __iomem *addr;
++	unsigned int offs, timeout = 100000;
++
++	atomic_set(&lmc->ecc_int, 0);
++
++	lmc->mem = alloc_pages_node(lmc->node, GFP_KERNEL, 0);
++
++	if (!lmc->mem)
++		return -ENOMEM;
++
++	addr = page_address(lmc->mem);
++
++	while (!atomic_read(&lmc->ecc_int) && timeout--) {
++		stop_machine(*inject_lmc_ecc_fn, lmc, NULL);
++
++		for (offs = 0; offs < PAGE_SIZE; offs += sizeof(tmp)) {
++			/* Do a load from the previously rigged location.
++			 * This should generate an error interrupt.
++			 */
++			memcpy(tmp, addr + offs, cline_size);
++			CVMX_SYNC;
++		}
++	}
++
++	__free_pages(lmc->mem, 0);
++
++	return count;
++}
++
++LMC_DEBUGFS_ENT(mask0);
++LMC_DEBUGFS_ENT(mask2);
++LMC_DEBUGFS_ENT(parity_test);
++
++DEBUGFS_STRUCT(inject_ecc, 0200, octeon_lmc_inject_ecc_write, NULL);
++
++struct debugfs_entry *lmc_dfs_ents[] = {
++	&debugfs_mask0,
++	&debugfs_mask2,
++	&debugfs_parity_test,
++	&debugfs_inject_ecc,
++};
++
++#ifdef CONFIG_EDAC_DEBUG
++static int octeon_create_debugfs_nodes(struct dentry *parent,
++				       struct debugfs_entry *attrs[],
++				       void *data, size_t num)
++{
++	int i;
++	struct dentry *ent;
++
++	if (!IS_ENABLED(CONFIG_EDAC_DEBUG))
++		return 0;
++	if (!parent)
++		return -ENOENT;
++
++	for (i = 0; i < num; i++) {
++		ent = debugfs_create_file(attrs[i]->name, attrs[i]->mode,
++					  parent, data, &attrs[i]->fops);
++		if (!ent)
++			break;
++	}
++
++	return i;
++}
++#endif
++
+ static void octeon_lmc_edac_poll(struct mem_ctl_info *mci)
+ {
+ 	union cvmx_lmcx_mem_cfg0 cfg0;
+@@ -68,185 +398,205 @@ static void octeon_lmc_edac_poll(struct mem_ctl_info *mci)
+ 		cvmx_write_csr(CVMX_LMCX_MEM_CFG0(mci->mc_idx), cfg0.u64);
+ }
+ 
+-static void octeon_lmc_edac_poll_o2(struct mem_ctl_info *mci)
++static void octeon_lmc_edac_poll_o3(struct mem_ctl_info *mci)
+ {
+-	struct octeon_lmc_pvt *pvt = mci->pvt_info;
+-	union cvmx_lmcx_int int_reg;
++	struct device *dev = &mci->dev;
++	struct octeon_edac_lmc_data *lmc_data;
++	union cvmx_lmcx_config lmc_config;
++	union cvmx_lmcx_int lmc_int;
++	union cvmx_lmcx_fadr fadr;
++	union cvmx_lmcx_ecc_synd ecc_synd;
++	union cvmx_l2c_ctl l2c_ctl;
++	union cvmx_lmcx_ddr_pll_ctl lmc_ddr_pll_ctl;
++	u64 fadr_physical;
++	u64 fadr_c;
++	u64 fadr_xkphys;
++	int interface_bits = 0;
++	int row_bits;
++	int col_bits;
++	int rank_bits;
++	int bank_bits;
++	int rmask;
++	int cmask;
++	int int_mask;
++	int pbank_lsb;
++	int row_lsb;
++	int lmc = mci->mc_idx;
++	int sec_err;
++	int ded_err;
++	int syndrome = -1;
++	int phase;
++	int i;
++	int bit;
++	int node = 0;
++	char msg[128];
+ 	bool do_clear = false;
+-	char msg[64];
+ 
+-	if (!pvt->inject)
+-		int_reg.u64 = cvmx_read_csr(CVMX_LMCX_INT(mci->mc_idx));
+-	else {
+-		int_reg.u64 = 0;
+-		if (pvt->error_type == 1)
+-			int_reg.s.sec_err = 1;
+-		if (pvt->error_type == 2)
+-			int_reg.s.ded_err = 1;
++	lmc_data = dev_get_platdata(mci->pdev);
++	if (!lmc_data) {
++		dev_err(dev, "Error: platform data is NULL\n");
++		return;
++	}
++	lmc = lmc_data->lmc;
++	node = lmc_data->node;
++
++	lmc_int.u64 = cvmx_read_csr_node(node, CVMX_LMCX_INT(lmc));
++	fadr.u64 = cvmx_read_csr_node(node, CVMX_LMCX_FADR(lmc));
++	ecc_synd.u64 = cvmx_read_csr_node(node, CVMX_LMCX_ECC_SYND(lmc));
++	lmc_config.u64 = cvmx_read_csr_node(node, CVMX_LMCX_CONFIG(lmc));
++	lmc_ddr_pll_ctl.u64 = cvmx_read_csr_node(node,
++						 CVMX_LMCX_DDR_PLL_CTL(lmc));
++	l2c_ctl.u64 = cvmx_read_csr_node(node, CVMX_L2C_CTL);
++
++	sec_err = lmc_int.s.sec_err;
++	ded_err = lmc_int.s.ded_err;
++	/* Double bit errors take precedence */
++	phase = ded_err ? ded_err : sec_err;
++
++	if (lmc_ddr_pll_ctl.s.ddr4_mode && lmc_config.s.bg2_enable)
++		bank_bits = 4;
++	else
++		bank_bits = 3;
++
++	/* The err mask should contain multiple failures.  Detect the first
++	 * failing 64b chunk to convert the mask into the phase that
++	 * corresponds to the information in FADR.
++	 */
++	for (i = 0; i < 4; i++) {
++		if ((phase >> i) & 1)
++			break;
++	}
++	phase = i;
++	switch (phase) {
++	case 0:
++		syndrome = ecc_synd.s.mrdsyn0;
++		break;
++	case 1:
++		syndrome = ecc_synd.s.mrdsyn1;
++		break;
++	case 2:
++		syndrome = ecc_synd.s.mrdsyn2;
++		break;
++	case 3:
++		syndrome = ecc_synd.s.mrdsyn3;
++		break;
+ 	}
+ 
+-	if (int_reg.s.sec_err || int_reg.s.ded_err) {
+-		union cvmx_lmcx_fadr fadr;
+-		if (likely(!pvt->inject))
+-			fadr.u64 = cvmx_read_csr(CVMX_LMCX_FADR(mci->mc_idx));
+-		else {
+-			fadr.cn61xx.fdimm = pvt->dimm;
+-			fadr.cn61xx.fbunk = pvt->rank;
+-			fadr.cn61xx.fbank = pvt->bank;
+-			fadr.cn61xx.frow = pvt->row;
+-			fadr.cn61xx.fcol = pvt->col;
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX) || OCTEON_IS_MODEL(OCTEON_CN68XX)) {
++		/* Detect four-lmc mode */
++		union cvmx_lmcx_dll_ctl2 ctl2;
++
++		ctl2.u64 = cvmx_read_csr(CVMX_LMCX_DLL_CTL2(3));
++		interface_bits = 1 + (ctl2.cn78xx.quad_dll_ena | ctl2.cn78xx.intf_en);
++	} else if (OCTEON_IS_MODEL(OCTEON_CN73XX) || OCTEON_IS_MODEL(OCTEON_CNF75XX)) {
++		/* Detect two-lmc mode */
++		union cvmx_lmcx_dll_ctl2 ctl2;
++
++		ctl2.u64 = cvmx_read_csr(CVMX_LMCX_DLL_CTL2(1));
++		interface_bits = (ctl2.cn73xx.intf_en | ctl2.cn73xx.quad_dll_ena);
++	}
++		
++
++	rank_bits = lmc_config.s.rank_ena;
++	pbank_lsb = lmc_config.s.pbank_lsb + 28 - rank_bits;
++
++	row_lsb = lmc_config.s.row_lsb + 14;
++	row_bits = pbank_lsb - row_lsb;
++	col_bits = row_lsb - bank_bits - 3;
++
++	cmask = (1 << col_bits) - 1;
++	rmask = (1 << row_bits) - 1;
++	int_mask = (1 << interface_bits) - 1;
++
++	if (OCTEON_IS_OCTEON3()) {
++		fadr_physical = (u64) fadr.cn73xx.fdimm <<
++				(rank_bits + pbank_lsb + interface_bits);
++		fadr_physical |= (u64) fadr.cn73xx.fbunk << (pbank_lsb + interface_bits);
++		fadr_physical |= (u64) (fadr.cn73xx.frow & rmask) << (row_lsb + interface_bits);
++		fadr_physical |= (u64) (fadr.cn73xx.fcol & 0xf) << 3;
++		fadr_physical |= (u64) fadr.cn73xx.fbank << (7 + interface_bits);
++		fadr_physical |= (u64) ((fadr.cn73xx.fcol & cmask) >> 4) <<
++				(7 + bank_bits + interface_bits);
++		if (!l2c_ctl.s.disidxalias) {
++			fadr_c = (lmc ^ (fadr_physical >> 12) ^
++				(fadr_physical >> 20)) & int_mask;
++			fadr_physical |= fadr_c << 7;
+ 		}
+-		if (OCTEON_IS_OCTEON3())
+-			snprintf(msg, sizeof(msg),
+-				"DIMM %d rank %d bank %d row %d col %d",
+-				fadr.cn70xx.fdimm, fadr.cn70xx.fbunk,
+-				fadr.cn70xx.fbank, fadr.cn70xx.frow, fadr.cn70xx.fcol);
++	} else {
++		union cvmx_lmcx_control lmc_control;
++		lmc_control.u64 = cvmx_read_csr_node(node, CVMX_LMCX_CONTROL(lmc));
++		fadr_physical = (u64) lmc << 7;
++		fadr_physical |= (u64) fadr.cn63xx.fdimm << (pbank_lsb + interface_bits);
++		fadr_physical |= (u64) fadr.cn63xx.fbunk << (pbank_lsb + interface_bits - 1);
++		fadr_physical |= (u64) (fadr.cn63xx.frow & rmask) << (row_lsb + interface_bits);
++		fadr_physical |= (u64) (fadr.cn63xx.fcol & 0xf) << 3;
++		fadr_physical |= (u64) ((fadr.cn63xx.fcol & cmask) >> 4) << (10 + interface_bits);
++		if (lmc_control.s.xor_bank)
++			fadr_physical |= (u64) (fadr.cn63xx.fbank ^
++				 ((fadr_physical >> (12 + interface_bits)) & 7)) << (7 + interface_bits);
+ 		else
+-			snprintf(msg, sizeof(msg),
+-				"DIMM %d rank %d bank %d row %d col %d",
+-				fadr.cn61xx.fdimm, fadr.cn61xx.fbunk,
+-				fadr.cn61xx.fbank, fadr.cn61xx.frow, fadr.cn61xx.fcol);
++			fadr_physical |= (u64) fadr.cn63xx.fbank << (7 + interface_bits);
++		fadr_physical |= (u64) (phase & 1) << 3;
+ 	}
+ 
+-	if (int_reg.s.sec_err) {
++	/* Account for 256MB hole */
++	fadr_physical += (fadr_physical < (u64) 0x10000000) ?
++		0 : (u64) 0x10000000;
++
++	bit = lmc_syndrome_bits[syndrome];
++	if (phase & 1)
++		bit += 64;
++
++	snprintf(msg, sizeof(msg), "DIMM %d rank %d bank %d row %d col %d bit %d address 0x%llx syndrome 0x%x",
++		 fadr.cn73xx.fdimm, fadr.cn73xx.fbunk, fadr.cn73xx.fbank,
++		 fadr.cn73xx.frow & rmask, fadr.cn73xx.fcol & cmask, bit,
++		 (unsigned long long)fadr_physical, syndrome);
++
++	/* Re-write the data using atomic add with the value 0 */
++	if (lmc_int.s.sec_err) {
++		fadr_xkphys = fadr_physical | (1ull << 63) | ((phase & 1) << 3);
++		CVMX_SYNC;
++		cvmx_atomic_add64_nosync((s64 *)fadr_xkphys, 0);
++		/* L2 cache hit writeback (no invalidate) */
++		CVMX_SYNC;
++		CVMX_CACHE_L2HWB(fadr_xkphys & ~0x7f, 0);
++
+ 		edac_mc_handle_error(HW_EVENT_ERR_CORRECTED, mci, 1, 0, 0, 0,
+ 				     -1, -1, -1, msg, "");
+-		int_reg.s.sec_err = -1;	/* Done, re-arm */
++		lmc_int.s.sec_err = -1;	/* Done, re-arm */
+ 		do_clear = true;
+ 	}
+ 
+-	if (int_reg.s.ded_err) {
++	if (lmc_int.s.ded_err) {
+ 		edac_mc_handle_error(HW_EVENT_ERR_UNCORRECTED, mci, 1, 0, 0, 0,
+ 				     -1, -1, -1, msg, "");
+-		int_reg.s.ded_err = -1;	/* Done, re-arm */
++		lmc_int.s.ded_err = -1;	/* Done, re-arm */
+ 		do_clear = true;
+ 	}
+-
+-	if (int_reg.s.nxm_wr_err) {
++	if (lmc_int.s.nxm_wr_err) {
+ 		snprintf(msg, sizeof(msg), "NXM_WR_ERR: Write to non-existent memory");
+ 		edac_mc_handle_error(HW_EVENT_ERR_CORRECTED, mci, 1, 0, 0, 0,
+ 				     -1, -1, -1, msg, "");
+-		int_reg.s.nxm_wr_err = -1;	/* Done, re-arm */
++		lmc_int.s.nxm_wr_err = -1;	/* Done, re-arm */
+ 		do_clear = true;
+ 	}
+ 
+-	if (do_clear) {
+-		if (likely(!pvt->inject))
+-			cvmx_write_csr(CVMX_LMCX_INT(mci->mc_idx), int_reg.u64);
+-		else
+-			pvt->inject = 0;
+-	}
+-}
+-
+-/************************ MC SYSFS parts ***********************************/
+-
+-/* Only a couple naming differences per template, so very similar */
+-#define TEMPLATE_SHOW(reg)						\
+-static ssize_t octeon_mc_inject_##reg##_show(struct device *dev,	\
+-			       struct device_attribute *attr,		\
+-			       char *data)				\
+-{									\
+-	struct mem_ctl_info *mci = to_mci(dev);				\
+-	struct octeon_lmc_pvt *pvt = mci->pvt_info;			\
+-	return sprintf(data, "%016llu\n", (u64)pvt->reg);		\
+-}
+-
+-#define TEMPLATE_STORE(reg)						\
+-static ssize_t octeon_mc_inject_##reg##_store(struct device *dev,	\
+-			       struct device_attribute *attr,		\
+-			       const char *data, size_t count)		\
+-{									\
+-	struct mem_ctl_info *mci = to_mci(dev);				\
+-	struct octeon_lmc_pvt *pvt = mci->pvt_info;			\
+-	if (isdigit(*data)) {						\
+-		if (!kstrtoul(data, 0, &pvt->reg))			\
+-			return count;					\
+-	}								\
+-	return 0;							\
+-}
+-
+-TEMPLATE_SHOW(inject);
+-TEMPLATE_STORE(inject);
+-TEMPLATE_SHOW(dimm);
+-TEMPLATE_STORE(dimm);
+-TEMPLATE_SHOW(bank);
+-TEMPLATE_STORE(bank);
+-TEMPLATE_SHOW(rank);
+-TEMPLATE_STORE(rank);
+-TEMPLATE_SHOW(row);
+-TEMPLATE_STORE(row);
+-TEMPLATE_SHOW(col);
+-TEMPLATE_STORE(col);
+-
+-static ssize_t octeon_mc_inject_error_type_store(struct device *dev,
+-					  struct device_attribute *attr,
+-					  const char *data,
+-					  size_t count)
+-{
+-	struct mem_ctl_info *mci = to_mci(dev);
+-	struct octeon_lmc_pvt *pvt = mci->pvt_info;
+-
+-	if (!strncmp(data, "single", 6))
+-		pvt->error_type = 1;
+-	else if (!strncmp(data, "double", 6))
+-		pvt->error_type = 2;
+-
+-	return count;
+-}
+-
+-static ssize_t octeon_mc_inject_error_type_show(struct device *dev,
+-					 struct device_attribute *attr,
+-					 char *data)
+-{
+-	struct mem_ctl_info *mci = to_mci(dev);
+-	struct octeon_lmc_pvt *pvt = mci->pvt_info;
+-	if (pvt->error_type == 1)
+-		return sprintf(data, "single");
+-	else if (pvt->error_type == 2)
+-		return sprintf(data, "double");
+-
+-	return 0;
++	if (do_clear)
++		cvmx_write_csr(CVMX_LMCX_INT(mci->mc_idx), lmc_int.u64);
+ }
+ 
+-static DEVICE_ATTR(inject, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_inject_show, octeon_mc_inject_inject_store);
+-static DEVICE_ATTR(error_type, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_error_type_show, octeon_mc_inject_error_type_store);
+-static DEVICE_ATTR(dimm, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_dimm_show, octeon_mc_inject_dimm_store);
+-static DEVICE_ATTR(rank, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_rank_show, octeon_mc_inject_rank_store);
+-static DEVICE_ATTR(bank, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_bank_show, octeon_mc_inject_bank_store);
+-static DEVICE_ATTR(row, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_row_show, octeon_mc_inject_row_store);
+-static DEVICE_ATTR(col, S_IRUGO | S_IWUSR,
+-		   octeon_mc_inject_col_show, octeon_mc_inject_col_store);
+-
+-static struct attribute *octeon_dev_attrs[] = {
+-	&dev_attr_inject.attr,
+-	&dev_attr_error_type.attr,
+-	&dev_attr_dimm.attr,
+-	&dev_attr_rank.attr,
+-	&dev_attr_bank.attr,
+-	&dev_attr_row.attr,
+-	&dev_attr_col.attr,
+-	NULL
+-};
+-
+-ATTRIBUTE_GROUPS(octeon_dev);
+-
+ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ {
+ 	struct mem_ctl_info *mci;
+-	struct edac_mc_layer layers[1];
++	struct edac_mc_layer layers[2];
+ 	int mc = pdev->id;
+ 
+-	opstate_init();
+-
+ 	layers[0].type = EDAC_MC_LAYER_CHANNEL;
+ 	layers[0].size = 1;
+ 	layers[0].is_virt_csrow = false;
++	layers[1].type = EDAC_MC_LAYER_SLOT;
++	layers[1].size = MAX_SLOTS;
++	layers[1].is_virt_csrow = false;
+ 
+ 	edac_op_state = EDAC_OPSTATE_POLL;
+ 
+@@ -265,13 +615,13 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ 		if (!present)
+ 			return -ENXIO;
+ 
+-		cfg0.u64 = cvmx_read_csr(CVMX_LMCX_MEM_CFG0(0));
++		cfg0.u64 = cvmx_read_csr(CVMX_LMCX_MEM_CFG0(mc));
+ 		if (!cfg0.s.ecc_ena) {
+ 			dev_info(&pdev->dev, "Disabled (ECC not enabled)\n");
+ 			return 0;
+ 		}
+ 
+-		mci = edac_mc_alloc(mc, ARRAY_SIZE(layers), layers, sizeof(struct octeon_lmc_pvt));
++		mci = edac_mc_alloc(mc, ARRAY_SIZE(layers), layers, 0);
+ 		if (!mci)
+ 			return -ENXIO;
+ 
+@@ -282,7 +632,7 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ 		mci->ctl_name = "octeon-lmc-err";
+ 		mci->edac_check = octeon_lmc_edac_poll;
+ 
+-		if (edac_mc_add_mc_with_groups(mci, octeon_dev_groups)) {
++		if (edac_mc_add_mc(mci)) {
+ 			dev_err(&pdev->dev, "edac_mc_add_mc() failed\n");
+ 			edac_mc_free(mci);
+ 			return -ENXIO;
+@@ -293,46 +643,78 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ 		cfg0.s.intr_sec_ena = 0;
+ 		cvmx_write_csr(CVMX_LMCX_MEM_CFG0(mc), cfg0.u64);
+ 	} else {
+-		/* OCTEON II */
++		/* OCTEON II and OCTEON III */
+ 		union cvmx_lmcx_int_en en;
+ 		union cvmx_lmcx_config config;
+ 		union cvmx_lmcx_dll_ctl2 ctl2;
++		int node = 0;
++		int intf = mc;
++		struct octeon_lmc *lmc;
++
++		if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
++			if (mc >= 4) {
++				intf -= 4;
++				node = 1;
++			}
++		}
+ 
+-		/* Check if LMC controller is enabled. */
+-		ctl2.u64 = cvmx_read_csr(CVMX_LMCX_DLL_CTL2(mc));
+-		if ((OCTEON_IS_OCTEON3() && ctl2.cn70xx.quad_dll_ena == 0) ||
+-		    (OCTEON_IS_OCTEON2() && ctl2.cn63xx.quad_dll_ena == 0)) {
+-			dev_info(&pdev->dev, "Disabled (LMC not present)\n");
+-			return 0;
++		ctl2.u64 = cvmx_read_csr_node(node, CVMX_LMCX_DLL_CTL2(intf));
++		if (OCTEON_IS_OCTEON3()) {
++			dev_info(&pdev->dev, "node: %d, intf: %d, intf_en: %d, quad_dll_en: %d\n",
++				node, intf, ctl2.cn78xx.intf_en, ctl2.cn78xx.quad_dll_ena);
++			if (!ctl2.cn78xx.quad_dll_ena) {
++				dev_info(&pdev->dev, "Disabled (LMC not present)\n");
++				return 0;
++			}
++		} else {
++			dev_info(&pdev->dev, "intf: %d, quad_dll_en: %d\n",
++				intf, ctl2.cn63xx.quad_dll_ena);
++			if (!ctl2.cn63xx.quad_dll_ena) {
++				dev_info(&pdev->dev, "Disabled (LMC not present)\n");
++				return 0;
++			}
+ 		}
+ 
+-		config.u64 = cvmx_read_csr(CVMX_LMCX_CONFIG(mc));
++		config.u64 = cvmx_read_csr_node(node, CVMX_LMCX_CONFIG(intf));
+ 		if (!config.s.ecc_ena) {
+ 			dev_info(&pdev->dev, "Disabled (ECC not enabled)\n");
+ 			return 0;
+ 		}
+ 
+-		mci = edac_mc_alloc(mc, ARRAY_SIZE(layers), layers, sizeof(struct octeon_lmc_pvt));
++		mci = edac_mc_alloc(mc, ARRAY_SIZE(layers), layers,
++				    sizeof(struct octeon_lmc));
+ 		if (!mci)
+ 			return -ENXIO;
+ 
+ 		mci->pdev = &pdev->dev;
+ 		mci->dev_name = dev_name(&pdev->dev);
+-
+ 		mci->mod_name = "octeon-lmc";
+ 		mci->ctl_name = "co_lmc_err";
+-		mci->edac_check = octeon_lmc_edac_poll_o2;
++		mci->edac_check = octeon_lmc_edac_poll_o3;
++		mci->scrub_mode = SCRUB_NONE;
++		lmc = mci->pvt_info;
+ 
+-		if (edac_mc_add_mc_with_groups(mci, octeon_dev_groups)) {
++		if (edac_mc_add_mc(mci)) {
+ 			dev_err(&pdev->dev, "edac_mc_add_mc() failed\n");
+ 			edac_mc_free(mci);
+ 			return -ENXIO;
+ 		}
+ 
+-		en.u64 = cvmx_read_csr(CVMX_LMCX_INT_EN(mc));
++		en.u64 = cvmx_read_csr_node(node, CVMX_LMCX_INT_EN(intf));
+ 		en.s.intr_ded_ena = 0;	/* We poll */
+ 		en.s.intr_sec_ena = 0;
+-		cvmx_write_csr(CVMX_LMCX_INT_EN(mc), en.u64);
++		cvmx_write_csr_node(node, CVMX_LMCX_INT_EN(intf), en.u64);
++#ifdef CONFIG_EDAC_DEBUG
++		if (IS_ENABLED(CONFIG_EDAC_DEBUG)) {
++			ret = octeon_create_debugfs_nodes(mci->debugfs,
++							  lmc_dfs_ents, lmc,
++							  ARRAY_SIZE(lmc_dfs_ents));
++			if (ret != ARRAY_SIZE(lmc_dfs_ents)) {
++				dev_warn(&pdev->dev, "Error creating debugfs entries: %d%s\n",
++					 ret, ret >= 0 ? " created" : "");
++			}
++		}
++#endif
+ 	}
+ 	platform_set_drvdata(pdev, mci);
+ 
+@@ -343,11 +725,8 @@ static int octeon_lmc_edac_remove(struct platform_device *pdev)
+ {
+ 	struct mem_ctl_info *mci = platform_get_drvdata(pdev);
+ 
+-	if (mci == NULL)
+-		goto out;
+ 	edac_mc_del_mc(&pdev->dev);
+ 	edac_mc_free(mci);
+-out:
+ 	return 0;
+ }
+ 
+-- 
+2.25.1
+

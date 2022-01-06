@@ -1,0 +1,28 @@
+From 808caeeffadad0557c0b270be102135e1b1d1ca5 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Wed, 22 May 2019 17:19:49 +0200
+Subject: [PATCH 260/345] watchdog: octeon-wdt: Implement G-30204 workaround.
+
+On most OCTEON III parts we need to issue a soft reset instead of
+letting the watchdog expire.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/watchdog/octeon-wdt-main.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/watchdog/octeon-wdt-main.c b/drivers/watchdog/octeon-wdt-main.c
+index eb495870f2d6..08994e2e0ba8 100644
+--- a/drivers/watchdog/octeon-wdt-main.c
++++ b/drivers/watchdog/octeon-wdt-main.c
+@@ -71,6 +71,7 @@
+ #include <asm/octeon/cvmx-boot-vector.h>
+ #include <asm/octeon/cvmx-ciu2-defs.h>
+ #include <asm/octeon/cvmx-rst-defs.h>
++#include <asm/octeon/cvmx-gserx-defs.h>
+ 
+ /* Watchdog interrupt major block number (8 MSBs of intsn) */
+ #define WD_BLOCK_NUMBER		0x01
+-- 
+2.25.1
+

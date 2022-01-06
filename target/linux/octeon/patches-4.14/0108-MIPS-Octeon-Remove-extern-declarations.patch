@@ -1,0 +1,308 @@
+From a65aa002568a99ed509a3608723368340e113b5e Mon Sep 17 00:00:00 2001
+From: "Steven J. Hill" <steven.hill@cavium.com>
+Date: Sat, 4 May 2019 20:40:31 +0200
+Subject: [PATCH 108/345] MIPS: Octeon: Remove extern declarations.
+
+Get rid of extern declarations in .c functions and included
+the necessary header file. Also remove unused UART declares.
+
+Signed-off-by: Steven J. Hill <steven.hill@cavium.com>
+Signed-off-by: Paul Burton <paul.burton@mips.com>
+Patchwork: https://patchwork.linux-mips.org/patch/19477/
+Cc: linux-mips@linux-mips.org
+---
+ arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c | 5 +----
+ arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c | 7 ++-----
+ arch/mips/cavium-octeon/executive/cvmx-helper-spi.c   | 8 +++-----
+ arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c  | 7 ++-----
+ arch/mips/cavium-octeon/setup.c                       | 4 ----
+ arch/mips/include/asm/octeon/cvmx-asxx-defs.h         | 4 +++-
+ arch/mips/include/asm/octeon/cvmx-gmxx-defs.h         | 4 +++-
+ arch/mips/include/asm/octeon/cvmx-pcsx-defs.h         | 4 +++-
+ arch/mips/include/asm/octeon/cvmx-pcsxx-defs.h        | 4 +++-
+ arch/mips/include/asm/octeon/cvmx-spxx-defs.h         | 4 +++-
+ arch/mips/include/asm/octeon/cvmx-stxx-defs.h         | 4 +++-
+ arch/mips/include/asm/octeon/octeon.h                 | 9 ++++-----
+ 12 files changed, 30 insertions(+), 34 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c b/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c
+index d18ed5af62f4..b8898e2b8a6f 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2008 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -42,9 +42,6 @@
+ #include <asm/octeon/cvmx-asxx-defs.h>
+ #include <asm/octeon/cvmx-dbg-defs.h>
+ 
+-void __cvmx_interrupt_gmxx_enable(int interface);
+-void __cvmx_interrupt_asxx_enable(int block);
+-
+ /**
+  * Probe RGMII ports and determine the number present
+  *
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c b/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c
+index 578283350776..a176358c5a21 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2008 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -39,10 +39,7 @@
+ 
+ #include <asm/octeon/cvmx-gmxx-defs.h>
+ #include <asm/octeon/cvmx-pcsx-defs.h>
+-
+-void __cvmx_interrupt_gmxx_enable(int interface);
+-void __cvmx_interrupt_pcsx_intx_en_reg_enable(int index, int block);
+-void __cvmx_interrupt_pcsxx_int_en_reg_enable(int index);
++#include <asm/octeon/cvmx-pcsxx-defs.h>
+ 
+ /**
+  * Perform initialization required only once for an SGMII port.
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c b/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c
+index ef16aa00167b..2a574d272671 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2008 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -25,10 +25,6 @@
+  * Contact Cavium Networks for more information
+  ***********************license end**************************************/
+ 
+-void __cvmx_interrupt_gmxx_enable(int interface);
+-void __cvmx_interrupt_spxx_int_msk_enable(int index);
+-void __cvmx_interrupt_stxx_int_msk_enable(int index);
+-
+ /*
+  * Functions for SPI initialization, configuration,
+  * and monitoring.
+@@ -41,6 +37,8 @@ void __cvmx_interrupt_stxx_int_msk_enable(int index);
+ 
+ #include <asm/octeon/cvmx-pip-defs.h>
+ #include <asm/octeon/cvmx-pko-defs.h>
++#include <asm/octeon/cvmx-spxx-defs.h>
++#include <asm/octeon/cvmx-stxx-defs.h>
+ 
+ /*
+  * CVMX_HELPER_SPI_TIMEOUT is used to determine how long the SPI
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c b/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c
+index 19d54e02c185..2bb6912a580d 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2008 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -39,12 +39,9 @@
+ 
+ #include <asm/octeon/cvmx-pko-defs.h>
+ #include <asm/octeon/cvmx-gmxx-defs.h>
++#include <asm/octeon/cvmx-pcsx-defs.h>
+ #include <asm/octeon/cvmx-pcsxx-defs.h>
+ 
+-void __cvmx_interrupt_gmxx_enable(int interface);
+-void __cvmx_interrupt_pcsx_intx_en_reg_enable(int index, int block);
+-void __cvmx_interrupt_pcsxx_int_en_reg_enable(int index);
+-
+ int __cvmx_helper_xaui_enumerate(int interface)
+ {
+ 	union cvmx_gmxx_hg2_control gmx_hg2_control;
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index a8034d0dcade..3ef1d47e65ae 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -1154,11 +1154,7 @@ void __init prom_free_prom_memory(void)
+ }
+ 
+ void __init octeon_fill_mac_addresses(void);
+-int octeon_prune_device_tree(void);
+ 
+-extern const char __appended_dtb;
+-extern const char __dtb_octeon_3xxx_begin;
+-extern const char __dtb_octeon_68xx_begin;
+ void __init device_tree_init(void)
+ {
+ 	const void *fdt;
+diff --git a/arch/mips/include/asm/octeon/cvmx-asxx-defs.h b/arch/mips/include/asm/octeon/cvmx-asxx-defs.h
+index a1e21a3854cf..1eef155979f3 100644
+--- a/arch/mips/include/asm/octeon/cvmx-asxx-defs.h
++++ b/arch/mips/include/asm/octeon/cvmx-asxx-defs.h
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2012 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -55,6 +55,8 @@
+ #define CVMX_ASXX_TX_HI_WATERX(offset, block_id) (CVMX_ADD_IO_SEG(0x00011800B0000080ull) + (((offset) & 3) + ((block_id) & 1) * 0x1000000ull) * 8)
+ #define CVMX_ASXX_TX_PRT_EN(block_id) (CVMX_ADD_IO_SEG(0x00011800B0000008ull) + ((block_id) & 1) * 0x8000000ull)
+ 
++void __cvmx_interrupt_asxx_enable(int block);
++
+ union cvmx_asxx_gmii_rx_clk_set {
+ 	uint64_t u64;
+ 	struct cvmx_asxx_gmii_rx_clk_set_s {
+diff --git a/arch/mips/include/asm/octeon/cvmx-gmxx-defs.h b/arch/mips/include/asm/octeon/cvmx-gmxx-defs.h
+index e347496a33c3..80e4f8358b81 100644
+--- a/arch/mips/include/asm/octeon/cvmx-gmxx-defs.h
++++ b/arch/mips/include/asm/octeon/cvmx-gmxx-defs.h
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2012 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -2070,6 +2070,8 @@ static inline uint64_t CVMX_GMXX_XAUI_EXT_LOOPBACK(unsigned long block_id)
+ 	return CVMX_ADD_IO_SEG(0x0001180008000540ull) + (block_id) * 0x8000000ull;
+ }
+ 
++void __cvmx_interrupt_gmxx_enable(int interface);
++
+ union cvmx_gmxx_bad_reg {
+ 	uint64_t u64;
+ 	struct cvmx_gmxx_bad_reg_s {
+diff --git a/arch/mips/include/asm/octeon/cvmx-pcsx-defs.h b/arch/mips/include/asm/octeon/cvmx-pcsx-defs.h
+index a5e8fd861c37..39da7f9d7b3f 100644
+--- a/arch/mips/include/asm/octeon/cvmx-pcsx-defs.h
++++ b/arch/mips/include/asm/octeon/cvmx-pcsx-defs.h
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2012 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -334,6 +334,8 @@ static inline uint64_t CVMX_PCSX_TX_RXX_POLARITY_REG(unsigned long offset, unsig
+ 	return CVMX_ADD_IO_SEG(0x00011800B0001048ull) + ((offset) + (block_id) * 0x20000ull) * 1024;
+ }
+ 
++void __cvmx_interrupt_pcsx_intx_en_reg_enable(int index, int block);
++
+ union cvmx_pcsx_anx_adv_reg {
+ 	uint64_t u64;
+ 	struct cvmx_pcsx_anx_adv_reg_s {
+diff --git a/arch/mips/include/asm/octeon/cvmx-pcsxx-defs.h b/arch/mips/include/asm/octeon/cvmx-pcsxx-defs.h
+index b5b45d26f1c5..847dd9dca6ea 100644
+--- a/arch/mips/include/asm/octeon/cvmx-pcsxx-defs.h
++++ b/arch/mips/include/asm/octeon/cvmx-pcsxx-defs.h
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2012 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -268,6 +268,8 @@ static inline uint64_t CVMX_PCSXX_TX_RX_STATES_REG(unsigned long block_id)
+ 	return CVMX_ADD_IO_SEG(0x00011800B0000830ull) + (block_id) * 0x1000000ull;
+ }
+ 
++void __cvmx_interrupt_pcsxx_int_en_reg_enable(int index);
++
+ union cvmx_pcsxx_10gbx_status_reg {
+ 	uint64_t u64;
+ 	struct cvmx_pcsxx_10gbx_status_reg_s {
+diff --git a/arch/mips/include/asm/octeon/cvmx-spxx-defs.h b/arch/mips/include/asm/octeon/cvmx-spxx-defs.h
+index c7d601d9446e..f4c4e8051160 100644
+--- a/arch/mips/include/asm/octeon/cvmx-spxx-defs.h
++++ b/arch/mips/include/asm/octeon/cvmx-spxx-defs.h
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2012 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -45,6 +45,8 @@
+ #define CVMX_SPXX_TPA_SEL(block_id) (CVMX_ADD_IO_SEG(0x0001180090000328ull) + ((block_id) & 1) * 0x8000000ull)
+ #define CVMX_SPXX_TRN4_CTL(block_id) (CVMX_ADD_IO_SEG(0x0001180090000360ull) + ((block_id) & 1) * 0x8000000ull)
+ 
++void __cvmx_interrupt_spxx_int_msk_enable(int index);
++
+ union cvmx_spxx_bckprs_cnt {
+ 	uint64_t u64;
+ 	struct cvmx_spxx_bckprs_cnt_s {
+diff --git a/arch/mips/include/asm/octeon/cvmx-stxx-defs.h b/arch/mips/include/asm/octeon/cvmx-stxx-defs.h
+index 146354005d3b..3c409a854d91 100644
+--- a/arch/mips/include/asm/octeon/cvmx-stxx-defs.h
++++ b/arch/mips/include/asm/octeon/cvmx-stxx-defs.h
+@@ -4,7 +4,7 @@
+  * Contact: support@caviumnetworks.com
+  * This file is part of the OCTEON SDK
+  *
+- * Copyright (c) 2003-2012 Cavium Networks
++ * Copyright (C) 2003-2018 Cavium, Inc.
+  *
+  * This file is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License, Version 2, as
+@@ -45,6 +45,8 @@
+ #define CVMX_STXX_STAT_CTL(block_id) (CVMX_ADD_IO_SEG(0x0001180090000638ull) + ((block_id) & 1) * 0x8000000ull)
+ #define CVMX_STXX_STAT_PKT_XMT(block_id) (CVMX_ADD_IO_SEG(0x0001180090000640ull) + ((block_id) & 1) * 0x8000000ull)
+ 
++void __cvmx_interrupt_stxx_int_msk_enable(int index);
++
+ union cvmx_stxx_arb_ctl {
+ 	uint64_t u64;
+ 	struct cvmx_stxx_arb_ctl_s {
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index c99c4b6a79f4..60481502826a 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -279,13 +279,12 @@ union octeon_cvmemctl {
+ 	} s;
+ };
+ 
+-extern void octeon_write_lcd(const char *s);
+ extern void octeon_check_cpu_bist(void);
+-extern int octeon_get_boot_uart(void);
+ 
+-struct uart_port;
+-extern unsigned int octeon_serial_in(struct uart_port *, int);
+-extern void octeon_serial_out(struct uart_port *, int, int);
++int octeon_prune_device_tree(void);
++extern const char __appended_dtb;
++extern const char __dtb_octeon_3xxx_begin;
++extern const char __dtb_octeon_68xx_begin;
+ 
+ /**
+  * Write a 32bit value to the Octeon NPI register space
+-- 
+2.25.1
+

@@ -1,0 +1,182 @@
+From caa1e4a4cad88fe7697cbd9d4f8258bf703993ee Mon Sep 17 00:00:00 2001
+From: Peter Swain <peter.swain@cavium.com>
+Date: Tue, 4 Jun 2019 14:29:47 +0200
+Subject: [PATCH 309/345] MIPS/octeon: Add /proc/pcie_reset file.
+
+Do: echo 0 > /proc/pcie_reset to reset PEM 0 pcie.
+
+Valid values to echo are:
+
+ 0,1,2,3 -- PEM 0, 1, 2, 3 node 0
+ 4,5,6,7 -- PEM 0, 1, 2, 3 node 1
+
+All devices should have first been removed from the PEM by doing:
+
+ echo 1 > /sys/devices/pci0000:00/0000:00:00.0/0000:01:00.0/remove
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Peter Swain <peter.swain@cavium.com>
+---
+ arch/mips/cavium-octeon/Kconfig      |  6 +++
+ arch/mips/cavium-octeon/Makefile     |  1 +
+ arch/mips/cavium-octeon/pcie_reset.c | 77 ++++++++++++++++++++++++++++
+ arch/mips/pci/pcie-octeon.c          | 11 ++--
+ 4 files changed, 90 insertions(+), 5 deletions(-)
+ create mode 100644 arch/mips/cavium-octeon/pcie_reset.c
+
+diff --git a/arch/mips/cavium-octeon/Kconfig b/arch/mips/cavium-octeon/Kconfig
+index 67a358698f36..8f1662026077 100644
+--- a/arch/mips/cavium-octeon/Kconfig
++++ b/arch/mips/cavium-octeon/Kconfig
+@@ -175,6 +175,12 @@ config CAVIUM_OCTEON_RAPIDIO
+ 	  as appropriate. After configuring this option, you will likely want
+ 	  to enable the RapidIO network adapter under the devices menu.
+ 
++config CAVIUM_PCIE_RESET
++	bool "OCTEON-specific PCIe reset file"
++	depends on PCI
++	help
++	  Adds /proc/pcie_reset
++
+ config OCTEON_FPA3
+ 	tristate "Octeon III fpa driver"
+ 	default "n"
+diff --git a/arch/mips/cavium-octeon/Makefile b/arch/mips/cavium-octeon/Makefile
+index eeec6d6da77c..a6483eb764de 100644
+--- a/arch/mips/cavium-octeon/Makefile
++++ b/arch/mips/cavium-octeon/Makefile
+@@ -33,6 +33,7 @@ obj-$(CONFIG_CAVIUM_OCTEON_ERROR_TREE)	+= octeon-error-tree.o octeon-78xx-errors
+ 	octeon-73xx-errors.o octeon-7xxx-errors.o octeon-75xx-errors.o
+ obj-$(CONFIG_SYSFS)                     += cacheinfo.o
+ obj-$(CONFIG_OCTEON_FPA3)		+= octeon-fpa3.o
++obj-$(CONFIG_CAVIUM_PCIE_RESET)		+= pcie_reset.o
+ obj-$(CONFIG_USB)		      += octeon-usb.o
+ 
+ ifdef CONFIG_SMP
+diff --git a/arch/mips/cavium-octeon/pcie_reset.c b/arch/mips/cavium-octeon/pcie_reset.c
+new file mode 100644
+index 000000000000..05989999578f
+--- /dev/null
++++ b/arch/mips/cavium-octeon/pcie_reset.c
+@@ -0,0 +1,77 @@
++/*
++ * Simple /proc interface to PCIe reset.
++ *
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2017 Cavium, Inc.
++ */
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/fs.h>
++#include <linux/seq_file.h>
++#include <linux/proc_fs.h>
++#include <linux/uaccess.h>
++
++#include <asm/octeon/octeon.h>
++
++static struct proc_dir_entry *proc_pcie_reset_entry;
++void octeon_pcie_setup_port(unsigned int node, unsigned int port, bool do_register);
++
++static ssize_t pcie_reset_write(struct file *file, const char __user *buf,
++				size_t count, loff_t *ppos)
++{
++	if (count) {
++		char c;
++		int pem;
++		int node;
++
++		if (get_user(c, buf))
++			return -EFAULT;
++		pem = c - '0';
++		if (pem < 0 || pem > 7)
++			return -EINVAL;
++
++		node = (pem >> 2) & 1;
++		pem &= 3;
++		octeon_pcie_setup_port(node, pem, false);
++		pr_notice("pcie_reset %d:%d\n", node, pem);
++	}
++	return count;
++}
++
++static const struct file_operations pcie_reset_operations = {
++	.write = pcie_reset_write,
++	.llseek = noop_llseek,
++};
++
++/*
++ * Module initialization
++ */
++static int __init pcie_reset_init(void)
++{
++	if (!octeon_has_feature(OCTEON_FEATURE_PCIE))
++		return 0;
++
++	pr_notice("/proc/pcie_reset: Interface loaded\n");
++
++	proc_pcie_reset_entry = proc_create("pcie_reset", 0400, NULL,
++					    &pcie_reset_operations);
++
++	return 0;
++}
++
++/*
++ * Module cleanup
++ */
++static void __exit pcie_reset_exit(void)
++{
++	if (proc_pcie_reset_entry)
++		remove_proc_entry("pcie_reset", NULL);
++}
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Cavium Inc. <support@cavium.com>");
++module_init(pcie_reset_init);
++module_exit(pcie_reset_exit);
+diff --git a/arch/mips/pci/pcie-octeon.c b/arch/mips/pci/pcie-octeon.c
+index 32c91046a7b3..6479a708e3e8 100644
+--- a/arch/mips/pci/pcie-octeon.c
++++ b/arch/mips/pci/pcie-octeon.c
+@@ -694,7 +694,7 @@ static void octeon_pcie_interface_init(struct octeon_pcie_interface *iface, unsi
+ 	iface->pem = pem;
+ }
+ 
+-static void octeon_pcie_setup_port(unsigned int node, unsigned int port)
++void octeon_pcie_setup_port(unsigned int node, unsigned int port, bool do_register)
+ {
+ 	int result;
+ 	int host_mode = 0;
+@@ -802,14 +802,15 @@ static void octeon_pcie_setup_port(unsigned int node, unsigned int port)
+ 		}
+ 		msleep(100); /* Some devices need extra time */
+ 		octeon_pcie[node][port].controller.index = gport;
+-		register_pci_controller(&octeon_pcie[node][port].controller);
++		if (do_register)
++			register_pci_controller(&octeon_pcie[node][port].controller);
+ 
+ 		device = cvmx_pcie_config_read32(gport, 0, 0, 0, 0);
+ 	} else {
+ 		pr_notice("PCIe: Port %d:%d in endpoint mode, skipping.\n", node, port);
+ 		/* CN63XX pass 1_x/2.0 errata PCIe-15205 */
+-		if (OCTEON_IS_MODEL(OCTEON_CN63XX_PASS1_X) ||
+-		    OCTEON_IS_MODEL(OCTEON_CN63XX_PASS2_0)) {
++		if (do_register && (OCTEON_IS_MODEL(OCTEON_CN63XX_PASS1_X) ||
++				    OCTEON_IS_MODEL(OCTEON_CN63XX_PASS2_0))) {
+ 			srio_war15205 += 1;
+ 		}
+ 	}
+@@ -847,7 +848,7 @@ static void octeon_pcie_setup_ports(void)
+ 
+ 	for_each_online_node (node)
+ 		for (port = 0; port < CVMX_PCIE_PORTS; port++)
+-			octeon_pcie_setup_port(node, port);
++			octeon_pcie_setup_port(node, port, true);
+ }
+ 
+ static int octeon_pcie_suspend(void)
+-- 
+2.25.1
+

@@ -1,0 +1,457 @@
+From 27a100d47245773956937a5b81e99224c3f7fc8b Mon Sep 17 00:00:00 2001
+From: David Daney <ddaney@caviumnetworks.com>
+Date: Thu, 9 May 2019 15:36:29 +0200
+Subject: [PATCH 109/345] MIPS: Use Octeon2 atomic instructions when
+ cpu_has_octeon2_isa.
+
+Note: <cpu_has_octeon2_isa> is compile-time option, may consider
+change to run-time switch similar to <cpu_has_saa>
+
+Signed-off-by: David Daney <ddaney@caviumnetworks.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/include/asm/atomic.h                | 302 ++++++++++++++++++
+ arch/mips/include/asm/cmpxchg.h               |  37 ++-
+ arch/mips/include/asm/cpu-features.h          |   3 +
+ .../cpu-feature-overrides.h                   |   3 +
+ 4 files changed, 342 insertions(+), 3 deletions(-)
+
+diff --git a/arch/mips/include/asm/atomic.h b/arch/mips/include/asm/atomic.h
+index 0ab176bdb8e8..0c6cd8102ae8 100644
+--- a/arch/mips/include/asm/atomic.h
++++ b/arch/mips/include/asm/atomic.h
+@@ -41,6 +41,153 @@
+  */
+ #define atomic_set(v, i)	WRITE_ONCE((v)->counter, (i))
+ 
++#if (IS_ENABLED(CONFIG_CAVIUM_OCTEON2))
++/*
++ * atomic_add - add integer to atomic variable
++ * @i: integer value to add
++ * @v: pointer of type atomic_t
++ *
++ * Atomically adds @i to @v.
++ */
++static inline void atomic_add(int i, atomic_t *v)
++{
++	__asm__ __volatile__(
++	".set	push\n\t"
++	".set	arch=octeon\n\t"
++	"saa    %1, (%2)\t# atomic_add (%0)\n\t"
++	".set	pop"
++	: "+m" (v->counter)
++	: "r" (i), "r" (&v->counter));
++}
++
++/*
++ * atomic_sub - subtract the atomic variable
++ * @i: integer value to subtract
++ * @v: pointer of type atomic_t
++ *
++ * Atomically subtracts @i from @v.
++ */
++static inline void atomic_sub(int i, atomic_t *v)
++{
++	__asm__ __volatile__(
++	".set	push\n\t"
++	".set	arch=octeon\n\t"
++	"saa    %1, (%2)\t# atomic_sub(%0)\n\t"
++	".set	pop"
++	: "+m" (v->counter)
++	: "r" (-i), "r" (&v->counter));
++}
++
++/*
++ * Same as above, but return the result value
++ */
++static inline int atomic_add_return_relaxed(int i, atomic_t *v)
++{
++	int result;
++
++	if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("lai\t%0,(%2)\t# atomic_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("lad\t%0,(%2)\t# atomic_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laa\t%0,(%2),%3\t# atomic_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (i));
++	return result + i;
++}
++
++static inline int atomic_fetch_add_relaxed(int i, atomic_t *v)
++{
++	int result;
++
++	if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("lai\t%0,(%2)\t# atomic_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("lad\t%0,(%2)\t# atomic_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laa\t%0,(%2),%3\t# atomic_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (i));
++	return result;
++}
++
++static inline int atomic_add_return(int i, atomic_t *v)
++{
++	int result;
++
++	smp_mb__before_llsc();
++
++	/*
++	 * For proper barrier semantics, the preceding
++	 * smp_mb__before_llsc() must expand to syncw.
++	 */
++	result = atomic_add_return_relaxed(i, v);
++	return result;
++}
++
++static inline int atomic_sub_return_relaxed(int i, atomic_t *v)
++{
++	int result;
++
++	if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("lai\t%0,(%2)\t# atomic_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("lad\t%0,(%2)\t# atomic_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laa\t%0,(%2),%3\t# atomic_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (-i));
++	return result - i;
++}
++
++static inline int atomic_fetch_sub_relaxed(int i, atomic_t *v)
++{
++	int result;
++
++	if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("lai\t%0,(%2)\t# atomic_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("lad\t%0,(%2)\t# atomic_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laa\t%0,(%2),%3\t# atomic_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (-i));
++	return result;
++}
++
++static inline int atomic_sub_return(int i, atomic_t *v)
++{
++	int result;
++
++	smp_mb__before_llsc();
++
++	/*
++	 * For proper barrier semantics, the preceding
++	 * smp_mb__before_llsc() must expand to syncw.
++	 */
++	result = atomic_sub_return_relaxed(i, v);
++
++	smp_llsc_mb();
++	return result;
++}
++#endif
++
+ #define ATOMIC_OP(op, c_op, asm_op)					      \
+ static __inline__ void atomic_##op(int i, atomic_t * v)			      \
+ {									      \
+@@ -173,6 +320,7 @@ static __inline__ int atomic_fetch_##op##_relaxed(int i, atomic_t * v)	      \
+ 	return result;							      \
+ }
+ 
++#if (!IS_ENABLED(CONFIG_CAVIUM_OCTEON2))
+ #define ATOMIC_OPS(op, c_op, asm_op)					      \
+ 	ATOMIC_OP(op, c_op, asm_op)					      \
+ 	ATOMIC_OP_RETURN(op, c_op, asm_op)				      \
+@@ -180,6 +328,7 @@ static __inline__ int atomic_fetch_##op##_relaxed(int i, atomic_t * v)	      \
+ 
+ ATOMIC_OPS(add, +=, addu)
+ ATOMIC_OPS(sub, -=, subu)
++#endif
+ 
+ #define atomic_add_return_relaxed	atomic_add_return_relaxed
+ #define atomic_sub_return_relaxed	atomic_sub_return_relaxed
+@@ -383,6 +532,157 @@ static __inline__ int __atomic_add_unless(atomic_t *v, int a, int u)
+  */
+ #define atomic64_set(v, i)	WRITE_ONCE((v)->counter, (i))
+ 
++#if (IS_ENABLED(CONFIG_CAVIUM_OCTEON2))
++/*
++ * atomic64_add - add integer to atomic variable
++ * @i: integer value to add
++ * @v: pointer of type atomic64_t
++ *
++ * Atomically adds @i to @v.
++ */
++static inline void atomic64_add(long i, atomic64_t *v)
++{
++	__asm__ __volatile__(
++	".set	push\n\t"
++	".set	arch=octeon\n\t"
++	"saad   %1, (%2)\t# atomic64_add (%0)\n\t"
++	".set	pop"
++	: "+m" (v->counter)
++	: "r" (i), "r" (v));
++}
++
++/*
++ * atomic64_sub - subtract the atomic variable
++ * @i: integer value to subtract
++ * @v: pointer of type atomic64_t
++ *
++ * Atomically subtracts @i from @v.
++ */
++static inline void atomic64_sub(long i, atomic64_t *v)
++{
++	__asm__ __volatile__(
++	".set	push\n\t"
++	".set	arch=octeon\n\t"
++	"saad    %1, (%2)\t# atomic64_sub (%0)\n\t"
++	".set	pop"
++	: "+m" (v->counter)
++	: "r" (-i), "r" (v));
++}
++
++/*
++ * Same as above, but return the result value
++ */
++static inline long atomic64_add_return_relaxed(long i, atomic64_t *v)
++{
++	long result;
++
++	if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("laid\t%0,(%2)\t# atomic64_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("ladd\t%0,(%2)\t# atomic64_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laad\t%0,(%2),%3\t# atomic64_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (i));
++	return result + i;
++}
++
++/*
++ * Same as above, but return the previous value
++ */
++static inline long atomic64_fetch_add_relaxed(long i, atomic64_t *v)
++{
++	long result;
++
++	if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("laid\t%0,(%2)\t# atomic64_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("ladd\t%0,(%2)\t# atomic64_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laad\t%0,(%2),%3\t# atomic64_add_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (i));
++	return result;
++}
++
++static inline long atomic64_add_return(long i, atomic64_t *v)
++{
++	long result;
++
++	smp_mb__before_llsc();
++	/*
++	 * For proper barrier semantics, the preceding
++	 * smp_mb__before_llsc() must expand to syncw.
++	 */
++	result = atomic64_add_return_relaxed(i, v);
++	smp_llsc_mb();
++	return result;
++}
++
++static inline long atomic64_sub_return_relaxed(long i, atomic64_t *v)
++{
++	long result;
++
++	if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("laid\t%0,(%2)\t# atomic64_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("ladd\t%0,(%2)\t# atomic64_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laad\t%0,(%2),%3\t# atomic64_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (-i));
++
++	return result - i;
++}
++
++static inline long atomic64_fetch_sub_relaxed(long i, atomic64_t *v)
++{
++	long result;
++
++	if (__builtin_constant_p(i) && i == -1)
++		__asm__ __volatile__("laid\t%0,(%2)\t# atomic64_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else if (__builtin_constant_p(i) && i == 1)
++		__asm__ __volatile__("ladd\t%0,(%2)\t# atomic64_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter));
++	else
++		__asm__ __volatile__("laad\t%0,(%2),%3\t# atomic64_sub_return (%1)"
++				: "=r" (result), "+m" (v->counter)
++				: "r" (&v->counter), "r" (-i));
++
++	return result;
++}
++
++static inline long atomic64_sub_return(long i, atomic64_t *v)
++{
++	long result;
++
++	smp_mb__before_llsc();
++
++	/*
++	 * For proper barrier semantics, the preceding
++	 * smp_mb__before_llsc() must expand to syncw.
++	 */
++	result = atomic64_sub_return_relaxed(i, v);
++	smp_llsc_mb();
++	return result;
++}
++#endif
++
+ #define ATOMIC64_OP(op, c_op, asm_op)					      \
+ static __inline__ void atomic64_##op(long i, atomic64_t * v)		      \
+ {									      \
+@@ -517,6 +817,7 @@ static __inline__ long atomic64_fetch_##op##_relaxed(long i, atomic64_t * v)  \
+ 	return result;							      \
+ }
+ 
++#if (!IS_ENABLED(CONFIG_CAVIUM_OCTEON2))
+ #define ATOMIC64_OPS(op, c_op, asm_op)					      \
+ 	ATOMIC64_OP(op, c_op, asm_op)					      \
+ 	ATOMIC64_OP_RETURN(op, c_op, asm_op)				      \
+@@ -524,6 +825,7 @@ static __inline__ long atomic64_fetch_##op##_relaxed(long i, atomic64_t * v)  \
+ 
+ ATOMIC64_OPS(add, +=, daddu)
+ ATOMIC64_OPS(sub, -=, dsubu)
++#endif
+ 
+ #define atomic64_add_return_relaxed	atomic64_add_return_relaxed
+ #define atomic64_sub_return_relaxed	atomic64_sub_return_relaxed
+diff --git a/arch/mips/include/asm/cmpxchg.h b/arch/mips/include/asm/cmpxchg.h
+index 89e9fb7976fe..538ebedec6ce 100644
+--- a/arch/mips/include/asm/cmpxchg.h
++++ b/arch/mips/include/asm/cmpxchg.h
+@@ -39,6 +39,29 @@ extern unsigned long __cmpxchg_called_with_bad_pointer(void)
+ extern unsigned long __xchg_called_with_bad_pointer(void)
+ 	__compiletime_error("Bad argument size for xchg");
+ 
++#define __xchg_asm_octeon(lac, las, law, max_val, m, val) 		\
++({									\
++	__typeof(*(m)) __ret;						\
++									\
++	if (__builtin_constant_p(val) && val == 0)			\
++		__asm__ __volatile__(lac "\t%0,(%1)\t"			\
++				: "=r" (__ret)				\
++				: "r" (m)				\
++				: "memory");				\
++	else if (__builtin_constant_p(val) && val == max_val)		\
++		__asm__ __volatile__(las "\t%0,(%1)\t"			\
++				: "=r" (__ret)				\
++				: "r" (m)				\
++				: "memory");				\
++	else								\
++		__asm__ __volatile__(law "\t%0,(%1),%2\t"		\
++				: "=r" (__ret)				\
++				: "r" (m), "r" (val)			\
++				: "memory");				\
++									\
++				__ret;					\
++})
++
+ #define __xchg_asm(ld, st, m, val)					\
+ ({									\
+ 	__typeof(*(m)) __ret;						\
+@@ -82,13 +105,21 @@ static inline unsigned long __xchg(volatile void *ptr, unsigned long x,
+ 		return __xchg_small(ptr, x, size);
+ 
+ 	case 4:
+-		return __xchg_asm("ll", "sc", (volatile u32 *)ptr, x);
++		if (cpu_has_octeon2_isa && kernel_uses_llsc)
++			return __xchg_asm_octeon("lac", "las", "law",
++					0xffffffffu, (volatile u32 *)ptr, x);
++		else
++			return __xchg_asm("ll", "sc", (volatile u32 *)ptr, x);
+ 
+ 	case 8:
+ 		if (!IS_ENABLED(CONFIG_64BIT))
+ 			return __xchg_called_with_bad_pointer();
+-
+-		return __xchg_asm("lld", "scd", (volatile u64 *)ptr, x);
++		
++		if (cpu_has_octeon2_isa && kernel_uses_llsc)
++			return __xchg_asm_octeon("lacd", "lasd", "lawd",
++					0xffffffffffffffffull, (volatile u64 *)ptr, x);
++		else
++			return __xchg_asm("lld", "scd", (volatile u64 *)ptr, x);
+ 
+ 	default:
+ 		return __xchg_called_with_bad_pointer();
+diff --git a/arch/mips/include/asm/cpu-features.h b/arch/mips/include/asm/cpu-features.h
+index 721b698bfe3c..f8362289a592 100644
+--- a/arch/mips/include/asm/cpu-features.h
++++ b/arch/mips/include/asm/cpu-features.h
+@@ -187,6 +187,9 @@
+ #ifndef cpu_has_local_ebase
+ #define cpu_has_local_ebase	1
+ #endif
++#ifndef cpu_has_octeon2_isa
++#define cpu_has_octeon2_isa 0
++#endif
+ 
+ /*
+  * I-Cache snoops remote store.	 This only matters on SMP.  Some multiprocessors
+diff --git a/arch/mips/include/asm/mach-cavium-octeon/cpu-feature-overrides.h b/arch/mips/include/asm/mach-cavium-octeon/cpu-feature-overrides.h
+index a4f798629c3d..82e7790f3bfb 100644
+--- a/arch/mips/include/asm/mach-cavium-octeon/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-cavium-octeon/cpu-feature-overrides.h
+@@ -46,6 +46,9 @@
+ #define cpu_has_64bits		1
+ #define cpu_has_octeon_cache	1
+ #define cpu_has_saa		octeon_has_saa()
++#ifdef CONFIG_CAVIUM_OCTEON2
++#define cpu_has_octeon2_isa     1
++#endif
+ #define cpu_has_mips32r1	1
+ #define cpu_has_mips32r2	1
+ #define cpu_has_mips64r1	1
+-- 
+2.25.1
+

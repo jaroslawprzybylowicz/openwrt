@@ -1,0 +1,34 @@
+From dda5d37b922d964db501fed0c1a6a81e5890ea72 Mon Sep 17 00:00:00 2001
+From: Ulf Hansson <ulf.hansson@linaro.org>
+Date: Thu, 2 May 2019 13:28:16 +0200
+Subject: [PATCH 256/345] mmc: core: Export API to allow hosts to get the card
+ address
+
+Some hosts controllers, like Cavium, needs to know whether the card
+operates in byte- or block-address mode. Therefore export a new API,
+mmc_card_is_blockaddr(), which provides this information.
+
+Signed-off-by: Ulf Hansson <ulf.hansson@linaro.org>
+Signed-off-by: Steven J. Hill <Steven.Hill@cavium.com>
+Acked-by: David Daney <david.daney@cavium.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ include/linux/mmc/card.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/linux/mmc/card.h b/include/linux/mmc/card.h
+index 279b39008a33..0e4a0e998952 100644
+--- a/include/linux/mmc/card.h
++++ b/include/linux/mmc/card.h
+@@ -315,6 +315,8 @@ static inline bool mmc_large_sector(struct mmc_card *card)
+ 
+ bool mmc_card_is_blockaddr(struct mmc_card *card);
+ 
++bool mmc_card_is_blockaddr(struct mmc_card *card);
++
+ #define mmc_card_mmc(c)		((c)->type == MMC_TYPE_MMC)
+ #define mmc_card_sd(c)		((c)->type == MMC_TYPE_SD)
+ #define mmc_card_sdio(c)	((c)->type == MMC_TYPE_SDIO)
+-- 
+2.25.1
+

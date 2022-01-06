@@ -1,0 +1,26 @@
+From 936b5ff90ea1eb80aab71308da0d3a874bd64175 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lukaszm@marvell.com>
+Date: Mon, 10 Jun 2019 13:45:30 +0200
+Subject: [PATCH 337/345] MIPS: Octeon: Fix node calculation
+
+Change-Id: If8a3c5ca801be47e61adcb54e3f35ea1f4ec45e4
+---
+ arch/mips/pci/pcie-octeon.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/pci/pcie-octeon.c b/arch/mips/pci/pcie-octeon.c
+index 6479a708e3e8..c35c3cf6a142 100644
+--- a/arch/mips/pci/pcie-octeon.c
++++ b/arch/mips/pci/pcie-octeon.c
+@@ -857,7 +857,7 @@ static int octeon_pcie_suspend(void)
+ 
+ 	for_each_online_node (node)
+ 		for (port = 0; port < CVMX_PCIE_PORTS; port++)
+-			cvmx_pcie_rc_shutdown((node << 2) | (port & 3));
++			cvmx_pcie_rc_shutdown((node << 4) | (port & 3));
+ 	return 0;
+ }
+ 
+-- 
+2.25.1
+

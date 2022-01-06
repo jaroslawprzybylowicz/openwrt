@@ -1,0 +1,69 @@
+From 6385095c73b98523d3319994837d561887256cdb Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@caviumnetworks.com>
+Date: Thu, 16 May 2019 15:48:20 +0200
+Subject: [PATCH 250/345] crypto: octeon: Use proper function to check for
+ features.
+
+Signed-off-by: Carlos Munoz <cmunoz@cavium.com>
+---
+ arch/mips/cavium-octeon/crypto/octeon-md5.c    | 2 +-
+ arch/mips/cavium-octeon/crypto/octeon-sha1.c   | 2 +-
+ arch/mips/cavium-octeon/crypto/octeon-sha256.c | 2 +-
+ arch/mips/cavium-octeon/crypto/octeon-sha512.c | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/crypto/octeon-md5.c b/arch/mips/cavium-octeon/crypto/octeon-md5.c
+index af4c712f7afc..4dc4a4cbc7ef 100644
+--- a/arch/mips/cavium-octeon/crypto/octeon-md5.c
++++ b/arch/mips/cavium-octeon/crypto/octeon-md5.c
+@@ -190,7 +190,7 @@ static struct shash_alg alg = {
+ 
+ static int __init md5_mod_init(void)
+ {
+-	if (!octeon_has_crypto())
++	if (!octeon_has_feature(OCTEON_FEATURE_CRYPTO))
+ 		return -ENOTSUPP;
+ 	return crypto_register_shash(&alg);
+ }
+diff --git a/arch/mips/cavium-octeon/crypto/octeon-sha1.c b/arch/mips/cavium-octeon/crypto/octeon-sha1.c
+index 2b74b5b67cae..75dc10291780 100644
+--- a/arch/mips/cavium-octeon/crypto/octeon-sha1.c
++++ b/arch/mips/cavium-octeon/crypto/octeon-sha1.c
+@@ -223,7 +223,7 @@ static struct shash_alg octeon_sha1_alg = {
+ 
+ static int __init octeon_sha1_mod_init(void)
+ {
+-	if (!octeon_has_crypto())
++	if (!octeon_has_feature(OCTEON_FEATURE_CRYPTO))
+ 		return -ENOTSUPP;
+ 	return crypto_register_shash(&octeon_sha1_alg);
+ }
+diff --git a/arch/mips/cavium-octeon/crypto/octeon-sha256.c b/arch/mips/cavium-octeon/crypto/octeon-sha256.c
+index 97e96fead08a..7c55da9f9026 100644
+--- a/arch/mips/cavium-octeon/crypto/octeon-sha256.c
++++ b/arch/mips/cavium-octeon/crypto/octeon-sha256.c
+@@ -260,7 +260,7 @@ static struct shash_alg octeon_sha256_algs[2] = { {
+ 
+ static int __init octeon_sha256_mod_init(void)
+ {
+-	if (!octeon_has_crypto())
++	if (!octeon_has_feature(OCTEON_FEATURE_CRYPTO))
+ 		return -ENOTSUPP;
+ 	return crypto_register_shashes(octeon_sha256_algs,
+ 				       ARRAY_SIZE(octeon_sha256_algs));
+diff --git a/arch/mips/cavium-octeon/crypto/octeon-sha512.c b/arch/mips/cavium-octeon/crypto/octeon-sha512.c
+index d5fb3c6f22ae..b8d9bc7f6885 100644
+--- a/arch/mips/cavium-octeon/crypto/octeon-sha512.c
++++ b/arch/mips/cavium-octeon/crypto/octeon-sha512.c
+@@ -257,7 +257,7 @@ static struct shash_alg octeon_sha512_algs[2] = { {
+ 
+ static int __init octeon_sha512_mod_init(void)
+ {
+-	if (!octeon_has_crypto())
++	if (!octeon_has_feature(OCTEON_FEATURE_CRYPTO))
+ 		return -ENOTSUPP;
+ 	return crypto_register_shashes(octeon_sha512_algs,
+ 				       ARRAY_SIZE(octeon_sha512_algs));
+-- 
+2.25.1
+

@@ -1,0 +1,461 @@
+From 0ab6c0ef85ac5a1c6901089729562fe1bc06060e Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@cavium.com>
+Date: Sun, 12 May 2019 15:01:01 +0200
+Subject: [PATCH 253/345] MIPS:OCTEON: Sync up SE files as of r154518.
+
+Signed-off-by: Carlos Munoz <cmunoz@cavium.com>
+---
+ arch/mips/cavium-octeon/executive/cvmx-dma-engine.c    | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-errata.c | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-loop.c   | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-npi.c    | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-pko.c    | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c  | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c  | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-spi.c    | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c   | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-pcie.c          | 8 ++++----
+ arch/mips/cavium-octeon/executive/cvmx-pko3.c          | 3 +++
+ arch/mips/cavium-octeon/executive/cvmx-spi.c           | 2 +-
+ arch/mips/cavium-octeon/executive/cvmx-spi4000.c       | 2 +-
+ arch/mips/include/asm/octeon/cvmx-core.h               | 2 +-
+ arch/mips/include/asm/octeon/cvmx-csr-enums.h          | 2 +-
+ arch/mips/include/asm/octeon/cvmx-dma-engine.h         | 2 +-
+ arch/mips/include/asm/octeon/cvmx-fpa.h                | 2 +-
+ arch/mips/include/asm/octeon/cvmx-fpa1.h               | 2 +-
+ arch/mips/include/asm/octeon/cvmx-fpa3.h               | 2 +-
+ arch/mips/include/asm/octeon/cvmx-gmx.h                | 2 +-
+ arch/mips/include/asm/octeon/cvmx-helper-errata.h      | 2 +-
+ arch/mips/include/asm/octeon/cvmx-helper-loop.h        | 2 +-
+ arch/mips/include/asm/octeon/cvmx-helper-npi.h         | 2 +-
+ arch/mips/include/asm/octeon/cvmx-helper-rgmii.h       | 2 +-
+ arch/mips/include/asm/octeon/cvmx-helper-sgmii.h       | 2 +-
+ arch/mips/include/asm/octeon/cvmx-helper-xaui.h        | 2 +-
+ arch/mips/include/asm/octeon/cvmx-ipd.h                | 2 +-
+ arch/mips/include/asm/octeon/cvmx-packet.h             | 2 +-
+ arch/mips/include/asm/octeon/cvmx-spi.h                | 2 +-
+ arch/mips/include/asm/octeon/cvmx-uart.h               | 2 +-
+ arch/mips/pci/pcie-octeon.c                            | 3 ---
+ 31 files changed, 35 insertions(+), 35 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-dma-engine.c b/arch/mips/cavium-octeon/executive/cvmx-dma-engine.c
+index 497f9b9172f9..89aa41cafdb3 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-dma-engine.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-dma-engine.c
+@@ -43,7 +43,7 @@
+  * Interface to the PCI / PCIe DMA engines. These are only avialable
+  * on chips with PCI / PCIe.
+  *
+- * <hr>$Revision: 127394 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <linux/export.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-errata.c b/arch/mips/cavium-octeon/executive/cvmx-helper-errata.c
+index 85dc3a0bca27..34c7485be454 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-errata.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-errata.c
+@@ -45,7 +45,7 @@
+  * chip errata. For the most part, code doesn't need to call
+  * these functions directly.
+  *
+- * <hr>$Revision: 95626 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/cvmx.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-loop.c b/arch/mips/cavium-octeon/executive/cvmx-helper-loop.c
+index c5eb1de819bd..53ea2f150c45 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-loop.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-loop.c
+@@ -43,7 +43,7 @@
+  * Functions for LOOP initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 115656 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/cvmx.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-npi.c b/arch/mips/cavium-octeon/executive/cvmx-helper-npi.c
+index 4559307f3a6b..ecaba4670728 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-npi.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-npi.c
+@@ -43,7 +43,7 @@
+  * Functions for NPI initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 120569 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/cvmx.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-pko.c b/arch/mips/cavium-octeon/executive/cvmx-helper-pko.c
+index e398cf7d72b8..400ff5026499 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-pko.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-pko.c
+@@ -42,7 +42,7 @@
+  *
+  * Helper Functions for the PKO
+  *
+- * $Id: cvmx-helper-pko.c 115744 2015-04-04 04:36:36Z awilliams $
++ * $Id$
+  */
+ 
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c b/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c
+index 3992f6ed0d8f..7bbf85c90c1b 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-rgmii.c
+@@ -43,7 +43,7 @@
+  * Functions for RGMII/GMII/MII initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 107037 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/cvmx.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c b/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c
+index 0880e32782e1..bd8c6aa4c480 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-sgmii.c
+@@ -43,7 +43,7 @@
+  * Functions for SGMII initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 122069 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/cvmx.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c b/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c
+index c97e043249b3..ebd74ca4ea91 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-spi.c
+@@ -43,7 +43,7 @@
+  * Functions for SPI initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 96176 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <linux/export.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c b/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c
+index 1dd8cc1c4d48..f3e99b768634 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-xaui.c
+@@ -43,7 +43,7 @@
+  * Functions for XAUI initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 123496 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <asm/octeon/cvmx.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-pcie.c b/arch/mips/cavium-octeon/executive/cvmx-pcie.c
+index cf38791d11ff..8d92a4295fdc 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-pcie.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-pcie.c
+@@ -1088,8 +1088,8 @@ static int __cvmx_pcie_rc_initialize_gen1(int pcie_port)
+ 
+ 	/* Setup BAR2 attributes */
+ 	/* Relaxed Ordering (NPEI_CTL_PORTn[PTLP_RO,CTLP_RO, WAIT_COM]) */
+-	/* ­ PTLP_RO,CTLP_RO should normally be set (except for debug). */
+-	/* ­ WAIT_COM=0 will likely work for all applications. */
++	/* \AD PTLP_RO,CTLP_RO should normally be set (except for debug). */
++	/* \AD WAIT_COM=0 will likely work for all applications. */
+ 	/* Load completion relaxed ordering (NPEI_CTL_PORTn[WAITL_COM]) */
+ 	if (pcie_port) {
+ 		cvmx_npei_ctl_port1_t npei_ctl_port;
+@@ -1999,8 +1999,8 @@ static int __cvmx_pcie_rc_initialize_gen2(int pcie_port)
+ 
+ 	/* Setup BAR2 attributes */
+ 	/* Relaxed Ordering (NPEI_CTL_PORTn[PTLP_RO,CTLP_RO, WAIT_COM]) */
+-	/* ­ PTLP_RO,CTLP_RO should normally be set (except for debug). */
+-	/* ­ WAIT_COM=0 will likely work for all applications. */
++	/* \AD PTLP_RO,CTLP_RO should normally be set (except for debug). */
++	/* \AD WAIT_COM=0 will likely work for all applications. */
+ 	/* Load completion relaxed ordering (NPEI_CTL_PORTn[WAITL_COM]) */
+ 	pemx_bar_ctl.u64 = CVMX_READ_CSR(CVMX_PEMX_BAR_CTL(pcie_port));
+ 	pemx_bar_ctl.s.bar1_siz = 3;	/* 256MB BAR1 */
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-pko3.c b/arch/mips/cavium-octeon/executive/cvmx-pko3.c
+index d83517a45939..58d54bfdd4f1 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-pko3.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-pko3.c
+@@ -786,6 +786,9 @@ static int cvmx_pko_setup_macs(int node)
+ 		pko_ptgfx_cfg.s.size = fifo_group_cfg[fifo] ;
+ 		if( fifo_group_spd[fifo] >= 40 )
+ 			if( pko_ptgfx_cfg.s.size >= 3)
++        	if (OCTEON_IS_MODEL(OCTEON_CN78XX))
++				pko_ptgfx_cfg.s.rate = 4;	/* 100 Gbps */
++			else
+ 				pko_ptgfx_cfg.s.rate = 3;	/* 50 Gbps */
+ 			else
+ 				pko_ptgfx_cfg.s.rate = 2;	/* 25 Gbps */
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-spi.c b/arch/mips/cavium-octeon/executive/cvmx-spi.c
+index fc9714ad6ff1..57e64d8cfa52 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-spi.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-spi.c
+@@ -42,7 +42,7 @@
+  *
+  * Support library for the SPI
+  *
+- * <hr>$Revision: 95258 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <linux/export.h>
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-spi4000.c b/arch/mips/cavium-octeon/executive/cvmx-spi4000.c
+index 5b7f62f5eb69..b33c41c659c1 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-spi4000.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-spi4000.c
+@@ -42,7 +42,7 @@
+  *
+  * Support library for the SPI4000 card
+  *
+- * <hr>$Revision: 78972 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifdef CVMX_BUILD_FOR_LINUX_KERNEL
+ #include <linux/export.h>
+diff --git a/arch/mips/include/asm/octeon/cvmx-core.h b/arch/mips/include/asm/octeon/cvmx-core.h
+index c1e0560e8da1..012def3e3a43 100644
+--- a/arch/mips/include/asm/octeon/cvmx-core.h
++++ b/arch/mips/include/asm/octeon/cvmx-core.h
+@@ -42,7 +42,7 @@
+  *
+  * Module to support operations on core such as TLB config, etc.
+  *
+- * <hr>$Revision: 96463 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ 
+diff --git a/arch/mips/include/asm/octeon/cvmx-csr-enums.h b/arch/mips/include/asm/octeon/cvmx-csr-enums.h
+index 6738ec499048..98570a47ce00 100644
+--- a/arch/mips/include/asm/octeon/cvmx-csr-enums.h
++++ b/arch/mips/include/asm/octeon/cvmx-csr-enums.h
+@@ -41,7 +41,7 @@
+  * @file
+  * Definitions for enumerations used with Octeon CSRs.
+  *
+- * <hr>$Revision: 73842 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ #ifndef __CVMX_CSR_ENUMS_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-dma-engine.h b/arch/mips/include/asm/octeon/cvmx-dma-engine.h
+index 794e6d2236e9..aeb00b78bf4c 100644
+--- a/arch/mips/include/asm/octeon/cvmx-dma-engine.h
++++ b/arch/mips/include/asm/octeon/cvmx-dma-engine.h
+@@ -43,7 +43,7 @@
+  * Interface to the PCI / PCIe DMA engines. These are only avialable
+  * on chips with PCI / PCIe.
+  *
+- * <hr>$Revision: 121436 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ 
+ #ifndef __CVMX_DMA_ENGINES_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-fpa.h b/arch/mips/include/asm/octeon/cvmx-fpa.h
+index e892dcc80874..03fa24f00ff6 100644
+--- a/arch/mips/include/asm/octeon/cvmx-fpa.h
++++ b/arch/mips/include/asm/octeon/cvmx-fpa.h
+@@ -42,7 +42,7 @@
+  *
+  * Interface to the hardware Free Pool Allocator.
+  *
+- * <hr>$Revision: 120123 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ 
+diff --git a/arch/mips/include/asm/octeon/cvmx-fpa1.h b/arch/mips/include/asm/octeon/cvmx-fpa1.h
+index b8c6b6e053af..3a476a82d075 100644
+--- a/arch/mips/include/asm/octeon/cvmx-fpa1.h
++++ b/arch/mips/include/asm/octeon/cvmx-fpa1.h
+@@ -43,7 +43,7 @@
+  * Interface to the hardware Free Pool Allocator on Octeon chips.
+  * These are the legacy models, i.e. prior to CN78XX/CN76XX.
+  *
+- * <hr>$Revision: 120123 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ 
+diff --git a/arch/mips/include/asm/octeon/cvmx-fpa3.h b/arch/mips/include/asm/octeon/cvmx-fpa3.h
+index 523cf3f4ee1a..a10672d68e72 100644
+--- a/arch/mips/include/asm/octeon/cvmx-fpa3.h
++++ b/arch/mips/include/asm/octeon/cvmx-fpa3.h
+@@ -42,7 +42,7 @@
+  *
+  * Interface to the CN78XX Free Pool Allocator, a.k.a. FPA3
+  *
+- * <hr>$Revision: 122227 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ 
+diff --git a/arch/mips/include/asm/octeon/cvmx-gmx.h b/arch/mips/include/asm/octeon/cvmx-gmx.h
+index 35b87dedf4e6..bf20a9bda53b 100644
+--- a/arch/mips/include/asm/octeon/cvmx-gmx.h
++++ b/arch/mips/include/asm/octeon/cvmx-gmx.h
+@@ -42,7 +42,7 @@
+  *
+  * Interface to the GMX hardware.
+  *
+- * <hr>$Revision: 112021 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ 
+ #ifndef __CVMX_GMX_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-helper-errata.h b/arch/mips/include/asm/octeon/cvmx-helper-errata.h
+index 2d71ddc3507f..495cd68f2869 100644
+--- a/arch/mips/include/asm/octeon/cvmx-helper-errata.h
++++ b/arch/mips/include/asm/octeon/cvmx-helper-errata.h
+@@ -45,7 +45,7 @@
+  * chip errata. For the most part, code doesn't need to call
+  * these functions directly.
+  *
+- * <hr>$Revision: 78972 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifndef __CVMX_HELPER_ERRATA_H__
+ #define __CVMX_HELPER_ERRATA_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-helper-loop.h b/arch/mips/include/asm/octeon/cvmx-helper-loop.h
+index 577ad33b0f63..3a4134cbd899 100644
+--- a/arch/mips/include/asm/octeon/cvmx-helper-loop.h
++++ b/arch/mips/include/asm/octeon/cvmx-helper-loop.h
+@@ -43,7 +43,7 @@
+  * Functions for LOOP initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 115656 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifndef __CVMX_HELPER_LOOP_H__
+ #define __CVMX_HELPER_LOOP_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-helper-npi.h b/arch/mips/include/asm/octeon/cvmx-helper-npi.h
+index af8248933365..c806d6d3afc1 100644
+--- a/arch/mips/include/asm/octeon/cvmx-helper-npi.h
++++ b/arch/mips/include/asm/octeon/cvmx-helper-npi.h
+@@ -43,7 +43,7 @@
+  * Functions for NPI initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 107037 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifndef __CVMX_HELPER_NPI_H__
+ #define __CVMX_HELPER_NPI_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-helper-rgmii.h b/arch/mips/include/asm/octeon/cvmx-helper-rgmii.h
+index 7bf73fe96732..0e9b2ed4762f 100644
+--- a/arch/mips/include/asm/octeon/cvmx-helper-rgmii.h
++++ b/arch/mips/include/asm/octeon/cvmx-helper-rgmii.h
+@@ -43,7 +43,7 @@
+  * Functions for RGMII/GMII/MII initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 107037 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifndef __CVMX_HELPER_RGMII_H__
+ #define __CVMX_HELPER_RGMII_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-helper-sgmii.h b/arch/mips/include/asm/octeon/cvmx-helper-sgmii.h
+index 82caef5997ab..05f10d981296 100644
+--- a/arch/mips/include/asm/octeon/cvmx-helper-sgmii.h
++++ b/arch/mips/include/asm/octeon/cvmx-helper-sgmii.h
+@@ -43,7 +43,7 @@
+  * Functions for SGMII initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 107037 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifndef __CVMX_HELPER_SGMII_H__
+ #define __CVMX_HELPER_SGMII_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-helper-xaui.h b/arch/mips/include/asm/octeon/cvmx-helper-xaui.h
+index 69bfdb1dc3b7..8b1f1a0d30ed 100644
+--- a/arch/mips/include/asm/octeon/cvmx-helper-xaui.h
++++ b/arch/mips/include/asm/octeon/cvmx-helper-xaui.h
+@@ -43,7 +43,7 @@
+  * Functions for XAUI initialization, configuration,
+  * and monitoring.
+  *
+- * <hr>$Revision: 123496 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ #ifndef __CVMX_HELPER_XAUI_H__
+ #define __CVMX_HELPER_XAUI_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-ipd.h b/arch/mips/include/asm/octeon/cvmx-ipd.h
+index a07f8cbc1280..bab1cbb12c34 100644
+--- a/arch/mips/include/asm/octeon/cvmx-ipd.h
++++ b/arch/mips/include/asm/octeon/cvmx-ipd.h
+@@ -42,7 +42,7 @@
+  *
+  * Interface to the hardware Input Packet Data unit.
+  *
+- * <hr>$Revision: 116854 $<hr>
++ * <hr>$Revision$<hr>
+  */
+ 
+ #ifndef __CVMX_IPD_H__
+diff --git a/arch/mips/include/asm/octeon/cvmx-packet.h b/arch/mips/include/asm/octeon/cvmx-packet.h
+index 5e628f05b2e9..d9b93422212c 100644
+--- a/arch/mips/include/asm/octeon/cvmx-packet.h
++++ b/arch/mips/include/asm/octeon/cvmx-packet.h
+@@ -42,7 +42,7 @@
+  *
+  * Packet buffer defines.
+  *
+- * <hr>$Revision: 95816 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ 
+diff --git a/arch/mips/include/asm/octeon/cvmx-spi.h b/arch/mips/include/asm/octeon/cvmx-spi.h
+index 9328995a326c..0297050ac4b1 100644
+--- a/arch/mips/include/asm/octeon/cvmx-spi.h
++++ b/arch/mips/include/asm/octeon/cvmx-spi.h
+@@ -42,7 +42,7 @@
+  *
+  * This file contains defines for the SPI interface
+  *
+- * <hr>$Revision: 78888 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  *
+  */
+diff --git a/arch/mips/include/asm/octeon/cvmx-uart.h b/arch/mips/include/asm/octeon/cvmx-uart.h
+index f973e13e1adf..a9cbc6b96287 100644
+--- a/arch/mips/include/asm/octeon/cvmx-uart.h
++++ b/arch/mips/include/asm/octeon/cvmx-uart.h
+@@ -42,7 +42,7 @@
+  *
+  * interface to the serial port UART hardware
+  *
+- * <hr>$Revision: 106907 $<hr>
++ * <hr>$Revision$<hr>
+  *
+  */
+ 
+diff --git a/arch/mips/pci/pcie-octeon.c b/arch/mips/pci/pcie-octeon.c
+index 6f9fc015801f..5f3b8d987abd 100644
+--- a/arch/mips/pci/pcie-octeon.c
++++ b/arch/mips/pci/pcie-octeon.c
+@@ -30,9 +30,6 @@
+ static int pcie_disable;
+ module_param(pcie_disable, int, S_IRUGO);
+ 
+-int cvmx_primary_pcie_bus_number = 1;
+-module_param(cvmx_primary_pcie_bus_number, int, S_IRUGO);
+-
+ static int enable_pcie_14459_war;
+ static int enable_pcie_bus_num_war[CVMX_PCIE_MAX_PORTS];
+ 
+-- 
+2.25.1
+

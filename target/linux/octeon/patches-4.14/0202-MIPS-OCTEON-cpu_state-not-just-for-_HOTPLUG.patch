@@ -1,0 +1,33 @@
+From a8464e67217b1d36f1ce0749d4811b487fda9b0d Mon Sep 17 00:00:00 2001
+From: Peter Swain <peter.swain@cavium.com>
+Date: Wed, 15 May 2019 18:03:05 +0200
+Subject: [PATCH 202/345] MIPS: OCTEON: cpu_state not just for _HOTPLUG
+
+previous commit 770fd1 "Remove oct-app-ctl hooks from SMP handlers"
+placed cpu_state definition under CONFIG_CPU_HOTPLUG,
+but it's also used in non-hotplug smp startup
+
+Signed-off-by: Peter Swain <peter.swain@cavium.com>
+---
+ arch/mips/cavium-octeon/smp.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/cavium-octeon/smp.c b/arch/mips/cavium-octeon/smp.c
+index c160cf20c462..f9c81cee98ca 100644
+--- a/arch/mips/cavium-octeon/smp.c
++++ b/arch/mips/cavium-octeon/smp.c
+@@ -34,10 +34,10 @@ volatile unsigned long octeon_processor_relocated_kernel_entry;
+ static struct cvmx_boot_vector_element *octeon_bootvector;
+ static void *octeon_hotplug_entry_raw;
+ extern asmlinkage void octeon_hotplug_entry(void);
++#endif
+ 
+ /* State of each CPU. */
+ DEFINE_PER_CPU(int, cpu_state);
+-#endif
+ 
+ extern void kernel_entry(unsigned long arg1, ...);
+ 
+-- 
+2.25.1
+

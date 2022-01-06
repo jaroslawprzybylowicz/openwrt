@@ -1,0 +1,56 @@
+From 03e35dd754fa4c8ab70fd0147b166ce3b6dae049 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Thu, 16 May 2019 13:42:35 +0200
+Subject: [PATCH 145/345] MIPS: OCTEON: octeon-lmc bug fixes
+
+Fix RML_TO error in octeon-lmc.
+Use correct CSR for disabling ECC errors interrupts for Octeon II.
+Register octeon-lmc only if DDR controller is present.
+Check for LMCX_DLL_CTL2[QUAD_DLL_ENA]
+which is set correctly for all OcteonII models.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/edac/octeon_edac-lmc.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/edac/octeon_edac-lmc.c b/drivers/edac/octeon_edac-lmc.c
+index aeb222ca3ed1..d802b2e752df 100644
+--- a/drivers/edac/octeon_edac-lmc.c
++++ b/drivers/edac/octeon_edac-lmc.c
+@@ -268,8 +268,16 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ 		/* OCTEON II */
+ 		union cvmx_lmcx_int_en en;
+ 		union cvmx_lmcx_config config;
++		union cvmx_lmcx_dll_ctl2 ctl2;
+ 
+-		config.u64 = cvmx_read_csr(CVMX_LMCX_CONFIG(0));
++		/* Check if LMC controller is enabled. */
++		ctl2.u64 = cvmx_read_csr(CVMX_LMCX_DLL_CTL2(mc));
++		if (ctl2.s.quad_dll_ena == 0) {
++			dev_info(&pdev->dev, "Disabled (LMC not present)\n");
++			return 0;
++		}
++
++		config.u64 = cvmx_read_csr(CVMX_LMCX_CONFIG(mc));
+ 		if (!config.s.ecc_ena) {
+ 			dev_info(&pdev->dev, "Disabled (ECC not enabled)\n");
+ 			return 0;
+@@ -292,10 +300,10 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ 			return -ENXIO;
+ 		}
+ 
+-		en.u64 = cvmx_read_csr(CVMX_LMCX_MEM_CFG0(mc));
++		en.u64 = cvmx_read_csr(CVMX_LMCX_INT_EN(mc));
+ 		en.s.intr_ded_ena = 0;	/* We poll */
+ 		en.s.intr_sec_ena = 0;
+-		cvmx_write_csr(CVMX_LMCX_MEM_CFG0(mc), en.u64);
++		cvmx_write_csr(CVMX_LMCX_INT_EN(mc), en.u64);
+ 	}
+ 	platform_set_drvdata(pdev, mci);
+ 
+-- 
+2.25.1
+

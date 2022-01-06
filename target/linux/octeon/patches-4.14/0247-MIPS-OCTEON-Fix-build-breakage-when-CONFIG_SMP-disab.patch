@@ -1,0 +1,37 @@
+From 9799826922dceb14c4b3464e0af63d9b0ca22d27 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sat, 18 May 2019 20:00:32 +0200
+Subject: [PATCH 247/345] MIPS: OCTEON: Fix build breakage when CONFIG_SMP
+ disabled
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/cavium-octeon/octeon-irq.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/octeon-irq.c b/arch/mips/cavium-octeon/octeon-irq.c
+index 510682aac441..e49cca6202c1 100644
+--- a/arch/mips/cavium-octeon/octeon-irq.c
++++ b/arch/mips/cavium-octeon/octeon-irq.c
+@@ -3099,10 +3099,14 @@ static int __init octeon_irq_init_ciu3(struct device_node *ciu_node,
+ 	u64 base_addr;
+ 	union cvmx_ciu3_const consts;
+ 
+-	node = of_node_to_nid(ciu_node);
+-	if (node >= ARRAY_SIZE(octeon_ciu3_info_per_node))
+-		return -EINVAL;
+-	
++	if(IS_ENABLED(CONFIG_NUMA)) {
++		node = of_node_to_nid(ciu_node);
++		if (node >= ARRAY_SIZE(octeon_ciu3_info_per_node))
++			return -EINVAL;
++	}
++	else
++		node = 0;
++
+ 	ciu3_info = kzalloc_node(sizeof(*ciu3_info), GFP_KERNEL, node);
+ 
+ 	if (!ciu3_info)
+-- 
+2.25.1
+

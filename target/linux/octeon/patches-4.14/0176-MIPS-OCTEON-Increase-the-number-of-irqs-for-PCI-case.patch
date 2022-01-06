@@ -1,0 +1,29 @@
+From 2a571e79f55f3b34155cfa9301a0985d36fb7237 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Thu, 16 May 2019 16:09:37 +0200
+Subject: [PATCH 176/345] MIPS: OCTEON: Increase the number of irqs for !PCI
+ case
+
+cn68XX has a lot of sources.  127 is not quite enough, increase to 255.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/include/asm/mach-cavium-octeon/irq.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/include/asm/mach-cavium-octeon/irq.h b/arch/mips/include/asm/mach-cavium-octeon/irq.h
+index 505465dc5c42..f5000677f9f7 100644
+--- a/arch/mips/include/asm/mach-cavium-octeon/irq.h
++++ b/arch/mips/include/asm/mach-cavium-octeon/irq.h
+@@ -47,7 +47,7 @@ enum octeon_irq {
+ 	OCTEON_IRQ_SRIO2,
+ 	OCTEON_IRQ_SRIO3,
+ #ifndef CONFIG_PCI_MSI
+-	OCTEON_IRQ_LAST = 127
++	OCTEON_IRQ_LAST = 255
+ #endif
+ };
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,38 @@
+From f221f37f230ebd7fed307f4d07c88bd49499fe2c Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Fri, 24 May 2019 17:01:39 +0200
+Subject: [PATCH 281/345] MIPS: Add ELF_CORE_COPY_REGS definition.
+
+This is required by the kdump infrastructure.  It used to exist but
+was removed.
+
+Add definition of ELF_CORE_COPY_REGS.
+
+Fixes: 30852ad0039b ("MIPS: Remove old core dump functions")
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/include/asm/elf.h | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/mips/include/asm/elf.h b/arch/mips/include/asm/elf.h
+index 0eb1a75be105..147bef139d5e 100644
+--- a/arch/mips/include/asm/elf.h
++++ b/arch/mips/include/asm/elf.h
+@@ -425,6 +425,14 @@ do {									\
+ 
+ #endif /* CONFIG_64BIT */
+ 
++#ifndef ELF_CORE_COPY_REGS
++struct pt_regs;
++void elf_dump_regs(elf_greg_t *gp, struct pt_regs *regs);
++
++#define ELF_CORE_COPY_REGS(elf_regs, regs)		\
++	elf_dump_regs((elf_greg_t *)&(elf_regs), regs);
++#endif
++
+ #define CORE_DUMP_USE_REGSET
+ #define ELF_EXEC_PAGESIZE	PAGE_SIZE
+ 
+-- 
+2.25.1
+

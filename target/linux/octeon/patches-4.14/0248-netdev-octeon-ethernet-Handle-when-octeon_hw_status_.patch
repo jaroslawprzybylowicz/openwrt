@@ -1,0 +1,89 @@
+From 7dcef94f90f84ae108d0886980316a9b1108d0b6 Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@caviumnetworks.com>
+Date: Sun, 5 May 2019 15:48:04 +0200
+Subject: [PATCH 248/345] netdev: octeon-ethernet: Handle when
+ octeon_hw_status_add_source() fails.
+
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/octeon-hw-status.c    | 16 ++++++++++---
+ .../ethernet/cavium/octeon/ethernet-sgmii.c   | 24 +++++++++++++++++--
+ 2 files changed, 35 insertions(+), 5 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/octeon-hw-status.c b/arch/mips/cavium-octeon/octeon-hw-status.c
+index 7b2a58e2ec67..5f31e4dec5ed 100644
+--- a/arch/mips/cavium-octeon/octeon-hw-status.c
++++ b/arch/mips/cavium-octeon/octeon-hw-status.c
+@@ -462,11 +462,21 @@ int octeon_hw_status_add_source(struct octeon_hw_status_reg *chain0)
+ 			rv = request_threaded_irq(root->irq, NULL,
+ 					octeon_hw_status_irq, IRQF_ONESHOT,
+ 					"octeon-hw-status", root);
+-			WARN(rv, pr_fmt("request_threaded_irq failed:"
+-				" irq %d, err %d\n"),
+-				root->irq, rv);
+ 			if (!rv)
+ 				root->own_irq = 1;
++			else {
++				write_lock(&octeon_hw_status_lock);
++				octeon_hw_status_roots = root->next;
++				write_unlock(&octeon_hw_status_lock);
++				w = root->child;
++				while(w) {
++					new_root = w->next;
++					kfree(w);
++					w = new_root;
++				}
++				kfree(root);
++				return rv;
++			}
+ 		}
+ 
+ 		if (count_debug)
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet-sgmii.c b/drivers/net/ethernet/cavium/octeon/ethernet-sgmii.c
+index c214703a1c7b..abf32b68151a 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet-sgmii.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet-sgmii.c
+@@ -157,11 +157,15 @@ int cvm_oct_sgmii_open(struct net_device *dev)
+ 
+ 		sr[i].bit = INT_BIT_LOC_FAULT;
+ 		en_mask |= 1ull << sr[i].bit;
+-		octeon_hw_status_add_source(sr);
++		rv = octeon_hw_status_add_source(sr);
++		if (rv)
++			goto err;
+ 
+ 		sr[i].bit = INT_BIT_REM_FAULT;
+ 		en_mask |= 1ull << sr[i].bit;
+-		octeon_hw_status_add_source(sr);
++		rv = octeon_hw_status_add_source(sr);
++		if (rv)
++			goto err1;
+ 
+ 		octeon_hw_status_enable(sr[i].reg, en_mask);
+ 		break;
+@@ -169,6 +173,22 @@ int cvm_oct_sgmii_open(struct net_device *dev)
+ 		break;
+ 	}
+ 	return 0;
++
++ err1:
++	memset(&sr[0], 0, sizeof(sr[0]));
++	sr[0].reg = CVMX_GMXX_RXX_INT_REG(priv->interface_port,
++					  priv->interface);
++	sr[0].mask_reg = CVMX_GMXX_RXX_INT_EN(priv->interface_port,
++					      priv->interface);
++	sr[0].ack_w1c = 1;
++	sr[0].bit = INT_BIT_LOC_FAULT;
++	octeon_hw_status_remove_source(&sr[0]);
++ err:
++	octeon_hw_status_notifier_unregister(&priv->hw_status_notifier);
++	priv->hw_status_notifier.notifier_call = NULL;
++	cvm_oct_sgmii_stop(dev);
++
++	return rv;
+ }
+ 
+ int cvm_oct_sgmii_stop(struct net_device *dev)
+-- 
+2.25.1
+

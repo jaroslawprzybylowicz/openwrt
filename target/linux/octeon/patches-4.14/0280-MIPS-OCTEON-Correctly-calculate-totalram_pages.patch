@@ -1,0 +1,51 @@
+From 2cc72feaabb2ed955431c5b14f6f456c4d8ee72a Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Wed, 22 May 2019 20:54:06 +0200
+Subject: [PATCH 280/345] MIPS: OCTEON: Correctly calculate totalram_pages
+
+The bootmem system already correctly accounts for memory, remove extra
+increments that were resulting in a 3x reporting of size of system
+memory.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/cavium-octeon/octeon-numa.c | 2 +-
+ arch/mips/cavium-octeon/setup.c       | 2 --
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/octeon-numa.c b/arch/mips/cavium-octeon/octeon-numa.c
+index c06a9e56dc5d..6e4e7c7c81bb 100644
+--- a/arch/mips/cavium-octeon/octeon-numa.c
++++ b/arch/mips/cavium-octeon/octeon-numa.c
+@@ -85,7 +85,7 @@ void __init mem_init(void)
+ {
+ 	unsigned long codesize, datasize, initsize, tmp;
+ 
+-	totalram_pages += free_all_bootmem();
++	free_all_bootmem();
+ 	setup_zero_pages();	/* This comes from node 0 */
+ 
+ 	codesize =  (unsigned long) &_etext - (unsigned long) &_text;
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 0a455efd077c..e3339904a7d9 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -1276,7 +1276,6 @@ void __init mach_bootmem_init(void)
+ 		if (is_usable && (nd->startmempfn == 0 || start < nd->startmempfn))
+ 			nd->startmempfn = start;
+ 	}
+-	totalram_pages = 0;
+ 
+ 	for_each_online_node(node) {
+ 		unsigned long bootmap_size;
+@@ -1308,7 +1307,6 @@ void __init mach_bootmem_init(void)
+ 				       PFN_DOWN(boot_mem_map.map[i].addr),
+ 				       PFN_UP(boot_mem_map.map[i].addr + boot_mem_map.map[i].size));
+ 			if (!is_init) {
+-				totalram_pages += PFN_DOWN(boot_mem_map.map[i].size);
+ 				memblock_add_node(boot_mem_map.map[i].addr, boot_mem_map.map[i].size, node);
+ 				free_bootmem_node(NODE_DATA(node), boot_mem_map.map[i].addr, boot_mem_map.map[i].size);
+ 			}
+-- 
+2.25.1
+

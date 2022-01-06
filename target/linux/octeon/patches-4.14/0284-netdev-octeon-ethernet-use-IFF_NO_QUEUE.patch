@@ -1,0 +1,57 @@
+From 5589489dd3c3c7a7301b7503d3c50c3115370270 Mon Sep 17 00:00:00 2001
+From: Peter Swain <pswain@cavium.com>
+Date: Wed, 8 May 2019 16:25:09 +0200
+Subject: [PATCH 284/345] netdev: octeon-ethernet: use IFF_NO_QUEUE
+
+The old (!dev->tx_queue_len) test in network core has
+been replaced by (dev->priv_flags & IFF_NO_QUEUE).
+
+Use this flag to avoid needless netif_stop_/_start_queue(),
+improving performance by an order of magnitude.
+
+Signed-off-by: Peter Swain <pswain@cavium.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/ethernet-xmit.c | 8 ++++----
+ drivers/net/ethernet/cavium/octeon/ethernet.c      | 3 ++-
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet-xmit.c b/drivers/net/ethernet/cavium/octeon/ethernet-xmit.c
+index 2c74b3569e19..22aa2035776c 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet-xmit.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet-xmit.c
+@@ -271,12 +271,12 @@ CVM_OCT_XMIT
+ 
+ 	/* Drop this packet if we have too many already queued to the HW */
+ 	if (unlikely(queue_depth >= MAX_OUT_QUEUE_DEPTH)) {
+-		if (dev->tx_queue_len != 0) {
+-			netif_stop_queue(dev);
+-		} else {
+-			/* If not using normal queueing.  */
++		if (dev->priv_flags & IFF_NO_QUEUE) {
++			/* not using normal queueing.  */
+ 			queue_type = QUEUE_DROP;
+ 			goto skip_xmit;
++		} else {
++			netif_stop_queue(dev);
+ 		}
+ 	}
+ 
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet.c b/drivers/net/ethernet/cavium/octeon/ethernet.c
+index 2f2303bdc8ea..798e344b495e 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet.c
+@@ -926,8 +926,9 @@ static int cvm_oct_probe(struct platform_device *pdev)
+ 				continue;
+ 			}
+ 
++			/* Using transmit queues degrades performance significantly */
+ 			if (disable_core_queueing)
+-				dev->tx_queue_len = 0;
++				dev->priv_flags |= IFF_NO_QUEUE;
+ 
+ 			/* Initialize the device private structure. */
+ 			SET_NETDEV_DEV(dev, &pdev->dev);
+-- 
+2.25.1
+

@@ -1,0 +1,28 @@
+From d3b51cb0579463c85fa1df411097ac27905e384b Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <Chandrakala.Chavva@cavium.com>
+Date: Wed, 12 Jun 2019 13:12:51 +0200
+Subject: [PATCH 335/345] MIPS: Octeon: Read BGXX_SPUX_FEC_CONTROL before using
+ it.
+
+Signed-off-by: Chandrakala Chavva <Chandrakala.Chavva@cavium.com>
+---
+ arch/mips/cavium-octeon/executive/cvmx-helper-bgx.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-helper-bgx.c b/arch/mips/cavium-octeon/executive/cvmx-helper-bgx.c
+index d81c70711014..1d71557a013b 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-helper-bgx.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-helper-bgx.c
+@@ -921,6 +921,9 @@ int cvmx_helper_set_autonegotiation(int xiface, int index, bool enable)
+ 		spu_an_adv.u64 =
+ 		cvmx_read_csr_node(node,
+ 				   CVMX_BGXX_SPUX_AN_ADV(index, interface));
++		spu_fec_control.u64 =
++		cvmx_read_csr_node(node,
++				   CVMX_BGXX_SPUX_FEC_CONTROL(index, interface));
+ 		spu_an_adv.s.fec_req = spu_fec_control.s.fec_en;
+ 		spu_an_adv.s.fec_able = 1;
+ 		spu_an_adv.s.a100g_cr10 = 0;
+-- 
+2.25.1
+

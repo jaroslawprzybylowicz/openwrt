@@ -1,0 +1,46 @@
+From c0bf2655a62709a4e52a7ee44fdecc9b388c212e Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Mon, 6 May 2019 21:00:14 +0200
+Subject: [PATCH 266/345] MIPS: OCTEON: Don't allow interrupts or scheduling
+ from CacheErr handler.
+
+Since CacheErr cannot be masked, it is possible for it to occur when
+the kernel has interrupts disabled.  Enabling interrupts in the
+handler can cause unexpected interrupts in critical sections and crash
+the kernel.
+
+Change the handler so that interrupts are disabled, and return back to
+the code that took the exception instead of via the interrupt return
+patch which may result in the scheduler being called.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/mm/cex-oct.S | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/arch/mips/mm/cex-oct.S b/arch/mips/mm/cex-oct.S
+index 72929b22daac..16384c7b4519 100644
+--- a/arch/mips/mm/cex-oct.S
++++ b/arch/mips/mm/cex-oct.S
+@@ -90,11 +90,14 @@
+ 	.set	noat
+ 
+ 	SAVE_ALL
+-	KMODE
++	CLI
+ 	jal	cache_parity_error_octeon_recoverable
+ 	 nop
+-	j	ret_from_exception
+-	 nop
+-
++	/* As RESTORE_ALL_AND_RET was removed we have to do it on our own */
++	RESTORE_TEMP
++	RESTORE_STATIC
++	RESTORE_AT
++	RESTORE_SOME
++	RESTORE_SP_AND_RET
+ 	.set pop
+ 	END(handle_cache_err)
+-- 
+2.25.1
+

@@ -1,0 +1,46 @@
+From 4f732f440a5c1f01799710f2e072f2fabcb0f69f Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Fri, 10 May 2019 20:44:07 +0200
+Subject: [PATCH 246/345] ata: Use WARN instead of BUG in pata_octeon_cf.
+
+It is preferable not to crash the kernel.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/ata/pata_octeon_cf.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/ata/pata_octeon_cf.c b/drivers/ata/pata_octeon_cf.c
+index d3d851b014a3..cdda806b245f 100644
+--- a/drivers/ata/pata_octeon_cf.c
++++ b/drivers/ata/pata_octeon_cf.c
+@@ -150,7 +150,7 @@ static void octeon_cf_set_piomode(struct ata_port *ap, struct ata_device *dev)
+ 		div = 8;
+ 	T = (int)((1000000000000LL * div) / octeon_get_io_clock_rate());
+ 
+-	BUG_ON(ata_timing_compute(dev, dev->pio_mode, &timing, T, T));
++	WARN_ON(ata_timing_compute(dev, dev->pio_mode, &timing, T, T));
+ 
+ 	t2 = timing.active;
+ 	if (t2)
+@@ -567,7 +567,7 @@ static void octeon_cf_dma_start(struct ata_queued_cmd *qc)
+ 
+ 	/* Get the scatter list entry we need to DMA into */
+ 	sg = qc->cursg;
+-	BUG_ON(!sg);
++	WARN_ON(!sg);
+ 
+ 	/*
+ 	 * Clear the DMA complete status.
+@@ -808,7 +808,7 @@ static unsigned int octeon_cf_qc_issue(struct ata_queued_cmd *qc)
+ 
+ 	case ATAPI_PROT_DMA:
+ 		dev_err(ap->dev, "Error, ATAPI not supported\n");
+-		BUG();
++		WARN_ON(true);
+ 
+ 	default:
+ 		return ata_sff_qc_issue(qc);
+-- 
+2.25.1
+

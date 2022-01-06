@@ -1,0 +1,30 @@
+From e86cc695bbc4b5326c916bc047df3fa1b5a4eb32 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Wed, 1 May 2019 15:13:38 +0200
+Subject: [PATCH 179/345] MIPS: Only flush local ICache in get_new_asid().
+
+For virtually tagged ICache, on ASID rollover, only the local ICache
+needs to be invalidated.  Flushing across all CPUs is unnecessary.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/include/asm/mmu_context.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/include/asm/mmu_context.h b/arch/mips/include/asm/mmu_context.h
+index da2004cef2d5..1ebb1841480e 100644
+--- a/arch/mips/include/asm/mmu_context.h
++++ b/arch/mips/include/asm/mmu_context.h
+@@ -105,7 +105,7 @@ get_new_mmu_context(struct mm_struct *mm, unsigned long cpu)
+ 
+ 	if (!((asid += cpu_asid_inc()) & cpu_asid_mask(&cpu_data[cpu]))) {
+ 		if (cpu_has_vtag_icache)
+-			flush_icache_all();
++			local_flush_icache_all();
+ 		local_flush_tlb_all();	/* start new asid cycle */
+ 		if (!asid)		/* fix version if needed */
+ 			asid = asid_first_version(cpu);
+-- 
+2.25.1
+

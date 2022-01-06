@@ -1,0 +1,80 @@
+From 4d3fd9fd2ce2b890a493ecca8245e42959b37df3 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lma@semihalf.com>
+Date: Tue, 4 Jun 2019 19:05:34 +0200
+Subject: [PATCH 330/345] Revert "MIPS: kexec: remove SMP_DUMP"
+
+This reverts commit c83c2eed67e578576acf08611bfb630bd199714b.
+---
+ arch/mips/include/asm/smp.h |  8 +++++++-
+ arch/mips/kernel/crash.c    |  2 +-
+ arch/mips/kernel/smp.c      | 17 +++++++++++++++++
+ 3 files changed, 25 insertions(+), 2 deletions(-)
+
+diff --git a/arch/mips/include/asm/smp.h b/arch/mips/include/asm/smp.h
+index 88ebd83b3bf9..963f50f11d3d 100644
+--- a/arch/mips/include/asm/smp.h
++++ b/arch/mips/include/asm/smp.h
+@@ -42,7 +42,9 @@ extern int __cpu_logical_map[NR_CPUS];
+ #define SMP_CALL_FUNCTION	0x2
+ /* Octeon - Tell another core to flush its icache */
+ #define SMP_ICACHE_FLUSH	0x4
+-#define SMP_ASK_C0COUNT		0x8
++/* Used by kexec crashdump to save all cpu's state */
++#define SMP_DUMP		0x8
++#define SMP_ASK_C0COUNT		0x10
+ 
+ /* Mask of CPUs which are currently definitely operating coherently */
+ extern cpumask_t cpu_coherent_mask;
+@@ -109,4 +111,8 @@ static inline void arch_send_call_function_ipi_mask(const struct cpumask *mask)
+ 	mp_ops->send_ipi_mask(mask, SMP_CALL_FUNCTION);
+ }
+ 
++#if defined(CONFIG_KEXEC)
++extern void (*dump_ipi_function_ptr)(void *);
++void dump_send_ipi(void (*dump_ipi_callback)(void *));
++#endif
+ #endif /* __ASM_SMP_H */
+diff --git a/arch/mips/kernel/crash.c b/arch/mips/kernel/crash.c
+index d455363d51c3..25044fe9a44d 100644
+--- a/arch/mips/kernel/crash.c
++++ b/arch/mips/kernel/crash.c
+@@ -58,7 +58,7 @@ static void crash_kexec_prepare_cpus(void)
+ 
+ 	ncpus = num_online_cpus() - 1;/* Excluding the panic cpu */
+ 
+-	smp_call_function(crash_shutdown_secondary, NULL, 0);
++	dump_send_ipi(crash_shutdown_secondary);
+ 	smp_wmb();
+ 
+ 	/*
+diff --git a/arch/mips/kernel/smp.c b/arch/mips/kernel/smp.c
+index fff46ba40799..f020d1a345b7 100644
+--- a/arch/mips/kernel/smp.c
++++ b/arch/mips/kernel/smp.c
+@@ -657,6 +657,23 @@ void flush_tlb_one(unsigned long vaddr)
+ EXPORT_SYMBOL(flush_tlb_page);
+ EXPORT_SYMBOL(flush_tlb_one);
+ 
++#if defined(CONFIG_KEXEC)
++void (*dump_ipi_function_ptr)(void *) = NULL;
++void dump_send_ipi(void (*dump_ipi_callback)(void *))
++{
++	int i;
++	int cpu = smp_processor_id();
++
++	dump_ipi_function_ptr = dump_ipi_callback;
++	smp_mb();
++	for_each_online_cpu(i)
++		if (i != cpu)
++			mp_ops->send_ipi_single(i, SMP_DUMP);
++
++}
++EXPORT_SYMBOL(dump_send_ipi);
++#endif
++
+ #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
+ 
+ static DEFINE_PER_CPU(atomic_t, tick_broadcast_count);
+-- 
+2.25.1
+

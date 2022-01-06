@@ -1,0 +1,42 @@
+From 103e841ba41afbbe5788a04c81e9e483c3d12271 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Mon, 13 May 2019 16:36:31 +0200
+Subject: [PATCH 240/345] MIPS: OCTEON: Enable Micrel 9031 PHY for OCTEON.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/net/phy/micrel.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/net/phy/micrel.c b/drivers/net/phy/micrel.c
+index 6c45ff650ec7..88b51f0a2a83 100644
+--- a/drivers/net/phy/micrel.c
++++ b/drivers/net/phy/micrel.c
+@@ -791,6 +791,12 @@ static int kszphy_probe(struct phy_device *phydev)
+ 	return 0;
+ }
+ 
++static struct of_device_id micrel9031_match[] = {
++	{
++		.compatible = "micrel,ksz9031",
++	}
++};
++
+ static struct phy_driver ksphy_driver[] = {
+ {
+ 	.phy_id		= PHY_ID_KS8737,
+@@ -983,6 +989,9 @@ static struct phy_driver ksphy_driver[] = {
+ 	.get_stats	= kszphy_get_stats,
+ 	.suspend	= genphy_suspend,
+ 	.resume		= kszphy_resume,
++	.mdiodrv.driver		= {
++				.of_match_table = micrel9031_match,
++			  },
+ }, {
+ 	.phy_id		= PHY_ID_KSZ8873MLL,
+ 	.phy_id_mask	= MICREL_PHY_ID_MASK,
+-- 
+2.25.1
+

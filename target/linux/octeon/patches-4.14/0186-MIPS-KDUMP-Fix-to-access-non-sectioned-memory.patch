@@ -1,0 +1,54 @@
+From ecc75ac7474801addecc9c68b55b24972eeba1fb Mon Sep 17 00:00:00 2001
+From: Prem Mallappa <prem.mallappa@gmail.com>
+Date: Sun, 5 May 2019 16:13:25 +0200
+Subject: [PATCH 186/345] MIPS: KDUMP: Fix to access non-sectioned memory
+
+When booted with initramfs, percpu crash_notes ends up in memory that is not accessible by crashkernel
+
+Signed-off-by: Prem Mallappa <pmallappa@caviumnetworks.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/kernel/crash_dump.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/arch/mips/kernel/crash_dump.c b/arch/mips/kernel/crash_dump.c
+index a8657d29c62e..b35f5c5eab13 100644
+--- a/arch/mips/kernel/crash_dump.c
++++ b/arch/mips/kernel/crash_dump.c
+@@ -4,6 +4,8 @@
+ #include <linux/crash_dump.h>
+ #include <linux/uaccess.h>
+ #include <linux/slab.h>
++#include <linux/errno.h>
++#include <linux/io.h>
+ 
+ static void *kdump_buf_page;
+ 
+@@ -32,19 +34,20 @@ ssize_t copy_oldmem_page(unsigned long pfn, char *buf,
+ 	if (!csize)
+ 		return 0;
+ 
+-	vaddr = kmap_atomic_pfn(pfn);
++	vaddr = ioremap(pfn << PAGE_SHIFT, PAGE_SIZE);
+ 
+ 	if (!userbuf) {
+ 		memcpy(buf, (vaddr + offset), csize);
+-		kunmap_atomic(vaddr);
++		iounmap(vaddr);
+ 	} else {
+ 		if (!kdump_buf_page) {
+ 			pr_warn("Kdump: Kdump buffer page not allocated\n");
+ 
+ 			return -EFAULT;
+ 		}
++
+ 		copy_page(kdump_buf_page, vaddr);
+-		kunmap_atomic(vaddr);
++		iounmap(vaddr);
+ 		if (copy_to_user(buf, (kdump_buf_page + offset), csize))
+ 			return -EFAULT;
+ 	}
+-- 
+2.25.1
+

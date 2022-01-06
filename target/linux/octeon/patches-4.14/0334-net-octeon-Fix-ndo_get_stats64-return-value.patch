@@ -1,0 +1,34 @@
+From a60fd88f4c8d776e86ff5ecb79eb90530c5078a6 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <Chandrakala.Chavva@cavium.com>
+Date: Sat, 8 Jun 2019 22:46:09 +0200
+Subject: [PATCH 334/345] net: octeon: Fix ndo_get_stats64 return value.
+
+Signed-off-by: Chandrakala Chavva <Chandrakala.Chavva@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+index 259fc2a57642..8b17e3c6ae03 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+@@ -2548,7 +2548,7 @@ static u64 read_pki_stat(int numa_node, u64 csr)
+ 	return v;
+ }
+ 
+-static struct rtnl_link_stats64 *octeon3_eth_ndo_get_stats64(struct net_device *netdev,
++static void octeon3_eth_ndo_get_stats64(struct net_device *netdev,
+ 							     struct rtnl_link_stats64 *s)
+ {
+ 	struct octeon3_ethernet *priv = netdev_priv(netdev);
+@@ -2599,7 +2599,6 @@ static struct rtnl_link_stats64 *octeon3_eth_ndo_get_stats64(struct net_device *
+ 	s->tx_bytes = atomic64_read(&priv->tx_octets);
+ 	s->tx_dropped = atomic64_read(&priv->tx_dropped);
+ #endif
+-	return s;
+ }
+ 
+ static int octeon3_eth_set_mac_address(struct net_device *netdev, void *addr)
+-- 
+2.25.1
+

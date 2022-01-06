@@ -1,0 +1,27 @@
+From dffdc39c8da86e550f60bfb8df0f6f13e671d3b5 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sat, 18 May 2019 20:14:27 +0200
+Subject: [PATCH 244/345] phy/marvell: Add did_interrupt() method for Marvell
+ 88E1240
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ drivers/net/phy/marvell.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/net/phy/marvell.c b/drivers/net/phy/marvell.c
+index e9e67c22c8bb..fcd95354a23e 100644
+--- a/drivers/net/phy/marvell.c
++++ b/drivers/net/phy/marvell.c
+@@ -2123,6 +2123,7 @@ static struct phy_driver marvell_drivers[] = {
+ 		.get_sset_count = marvell_get_sset_count,
+ 		.get_strings = marvell_get_strings,
+ 		.get_stats = marvell_get_stats,
++		.did_interrupt = m88e1121_did_interrupt,
+ 	},
+ 	{
+ 		.phy_id = MARVELL_PHY_ID_88E1116R,
+-- 
+2.25.1
+

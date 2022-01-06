@@ -1,0 +1,68 @@
+From d4eb0120f681730601c0d74d6d5b537eaa237c81 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Fri, 3 May 2019 18:54:16 +0200
+Subject: [PATCH 159/345] MIPS: OCTEON: Use current_cpu_type() for CPU model
+ check.
+
+Replace OCTEON_IS_OCTEON2() and OCTEON_IS_OCTEON3() with appropriate
+current_cpu_type().
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/dma-octeon.c | 5 +++--
+ arch/mips/cavium-octeon/setup.c      | 2 +-
+ drivers/edac/octeon_edac-pc.c        | 2 +-
+ 3 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/dma-octeon.c b/arch/mips/cavium-octeon/dma-octeon.c
+index c64bd87f0b6e..5157c8ab9047 100644
+--- a/arch/mips/cavium-octeon/dma-octeon.c
++++ b/arch/mips/cavium-octeon/dma-octeon.c
+@@ -263,7 +263,8 @@ void __init plat_swiotlb_setup(void)
+ 			continue;
+ 
+ 		/* These addresses map low for PCI. */
+-		if (e->addr > 0x410000000ull && !OCTEON_IS_OCTEON2())
++		if (e->addr > 0x410000000ull &&
++		    current_cpu_type() != CPU_CAVIUM_OCTEON2)
+ 			continue;
+ 
+ 		addr_size += e->size;
+@@ -295,7 +296,7 @@ void __init plat_swiotlb_setup(void)
+ #endif
+ #ifdef CONFIG_USB_OHCI_HCD_PLATFORM
+ 	/* OCTEON II ohci is only 32-bit. */
+-	if (OCTEON_IS_OCTEON2() && max_addr >= 0x100000000ul)
++	if (current_cpu_type() == CPU_CAVIUM_OCTEON2 && max_addr >= 0x100000000ul)
+ 		swiotlbsize = 64 * (1<<20);
+ #endif
+ 	swiotlb_nslabs = swiotlbsize >> IO_TLB_SHIFT;
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index e2dbb6adc533..5770721707b6 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -532,7 +532,7 @@ void octeon_user_io_init(void)
+ 	cvmmemctl.s.cvmsegenau = 0;
+ 
+ 	/* Enable TLB parity error reporting on OCTEON II */
+-	if (OCTEON_IS_OCTEON2())
++	if (current_cpu_type() == CPU_CAVIUM_OCTEON2)
+ 		cvmmemctl.s.tlbperrena = 1;
+ 
+ 	write_c0_cvmmemctl(cvmmemctl.u64);
+diff --git a/drivers/edac/octeon_edac-pc.c b/drivers/edac/octeon_edac-pc.c
+index 392709f3208e..6758f6b759d2 100644
+--- a/drivers/edac/octeon_edac-pc.c
++++ b/drivers/edac/octeon_edac-pc.c
+@@ -85,7 +85,7 @@ static int  co_cache_error_event(struct notifier_block *this,
+ 			edac_device_handle_ce(p->ed, cpu, 0, "dcache");
+ 
+ 		/* Clear the error indication */
+-		if (OCTEON_IS_OCTEON2())
++		if (current_cpu_type() == CPU_CAVIUM_OCTEON2)
+ 			write_octeon_c0_dcacheerr(1);
+ 		else
+ 			write_octeon_c0_dcacheerr(0);
+-- 
+2.25.1
+

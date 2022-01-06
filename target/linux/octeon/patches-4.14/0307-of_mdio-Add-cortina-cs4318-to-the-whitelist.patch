@@ -1,0 +1,30 @@
+From 0988cc3aeb8ce86e4ab3ac64bad7d319d71cf84f Mon Sep 17 00:00:00 2001
+From: "Steven J. Hill" <Steven.Hill@cavium.com>
+Date: Sat, 4 May 2019 22:07:48 +0200
+Subject: [PATCH 307/345] of_mdio: Add "cortina,cs4318" to the whitelist.
+
+Some Cavium dev boards have firmware which doesn't supply a
+proper "ethernet-phy-XXX" compatible property. Restore boards
+to working order by whitelisting this compatible value. This
+fixes Bugzilla #30561.
+
+Signed-off-by: Steven J. Hill <Steven.Hill@cavium.com>
+---
+ drivers/of/of_mdio.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/of/of_mdio.c b/drivers/of/of_mdio.c
+index 8a005324030b..b0bdbb767142 100644
+--- a/drivers/of/of_mdio.c
++++ b/drivers/of/of_mdio.c
+@@ -144,6 +144,7 @@ static int of_mdiobus_register_device(struct mii_bus *mdio,
+ static const struct of_device_id whitelist_phys[] = {
+ 	{ .compatible = "brcm,40nm-ephy" },
+ 	{ .compatible = "broadcom,bcm5241" },
++	{ .compatible = "cortina,cs4318", },
+ 	{ .compatible = "marvell,88E1111", },
+ 	{ .compatible = "marvell,88e1116", },
+ 	{ .compatible = "marvell,88e1118", },
+-- 
+2.25.1
+

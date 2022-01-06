@@ -1,0 +1,67 @@
+From 368973edb5d69ee7bfe730a26b72a24295351e76 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Wed, 1 May 2019 19:05:03 +0200
+Subject: [PATCH 177/345] MIPS: Handle indexed load instructions in
+ emulate_load_store_insn().
+
+Doing this produces the proper signals to userspace when things go
+wrong.  We will get SIGBUS instead if SIGILL for the indexed load
+operations.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/kernel/unaligned.c | 38 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 38 insertions(+)
+
+diff --git a/arch/mips/kernel/unaligned.c b/arch/mips/kernel/unaligned.c
+index 2d4d0d879e4b..9b32207b6eda 100644
+--- a/arch/mips/kernel/unaligned.c
++++ b/arch/mips/kernel/unaligned.c
+@@ -960,6 +960,44 @@ static void emulate_load_store_insn(struct pt_regs *regs,
+ 				compute_return_epc(regs);
+ 				regs->regs[insn.dsp_format.rd] = value;
+ 				break;
++#ifdef CONFIG_64BIT
++			case ldx_op:
++				if (!access_ok(VERIFY_READ, addr, 8))
++					goto sigbus;
++
++				LoadDW(addr, value, res);
++				if (res)
++					goto fault;
++				compute_return_epc(regs);
++				regs->regs[insn.dsp_format.rd] = value;
++				break;
++
++			case lwux_op:
++				if (!access_ok(VERIFY_READ, addr, 4))
++					goto sigbus;
++
++				LoadWU(addr, value, res);
++				if (res)
++					goto fault;
++				compute_return_epc(regs);
++				regs->regs[insn.dsp_format.rd] = value;
++				break;
++#endif /* CONFIG_64BIT */
++
++			case lhux_op:
++				if (!access_ok(VERIFY_READ, addr, 2))
++					goto sigbus;
++
++				LoadHWU(addr, value, res);
++				if (res)
++					goto fault;
++				compute_return_epc(regs);
++				regs->regs[insn.dsp_format.rd] = value;
++				break;
++
++			case lbux_op:
++			case lbx_op:
++				goto sigbus;
+ 			default:
+ 				goto sigill;
+ 			}
+-- 
+2.25.1
+

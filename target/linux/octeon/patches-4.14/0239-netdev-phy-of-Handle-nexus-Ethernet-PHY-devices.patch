@@ -1,0 +1,45 @@
+From 991a452376065ed92ea8f013e99b85ee871a5c90 Mon Sep 17 00:00:00 2001
+From: Aaron Williams <aaron.williams@cavium.com>
+Date: Thu, 23 May 2019 16:52:50 +0200
+Subject: [PATCH 239/345] netdev/phy/of: Handle nexus Ethernet PHY devices
+
+Some multi-phy devices have resources that are global between all of the
+PHYs on the same device such as the Vitesse vsc8488.  In this case each
+individual PHY is contained within a phy nexus device.
+
+Signed-off-by: Aaron Williams <aaron.williams@cavium.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+Signed-off-by: Corey Minyard <cminyard@mvista.com>
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/of/of_mdio.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/of/of_mdio.c b/drivers/of/of_mdio.c
+index c2a22b67b058..8a005324030b 100644
+--- a/drivers/of/of_mdio.c
++++ b/drivers/of/of_mdio.c
+@@ -20,6 +20,7 @@
+ #include <linux/of_irq.h>
+ #include <linux/of_mdio.h>
+ #include <linux/of_net.h>
++#include <linux/of_platform.h>
+ #include <linux/module.h>
+ 
+ #define DEFAULT_GPIO_RESET_DELAY	10	/* in microseconds */
+@@ -233,6 +234,11 @@ int of_mdiobus_register(struct mii_bus *mdio, struct device_node *np)
+ 			continue;
+ 		}
+ 
++		if (of_device_is_compatible(child, "ethernet-phy-nexus")) {
++			of_platform_device_create(child, NULL, &mdio->dev);
++			continue;
++		}
++
+ 		if (of_mdiobus_child_is_phy(child))
+ 			rc = of_mdiobus_register_phy(mdio, child, addr);
+ 		else
+-- 
+2.25.1
+

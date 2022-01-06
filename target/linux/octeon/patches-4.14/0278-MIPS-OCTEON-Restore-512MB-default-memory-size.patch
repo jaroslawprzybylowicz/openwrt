@@ -1,0 +1,28 @@
+From edc20046fd319def7dd1d69b2a0147897416283e Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Fri, 24 May 2019 20:48:04 +0200
+Subject: [PATCH 278/345] MIPS: OCTEON: Restore 512MB default memory size.
+
+Upstream the default was made unlimited, put it back to 512MB.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/cavium-octeon/setup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 74d978731dee..0a455efd077c 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -73,7 +73,7 @@ const bool octeon_should_swizzle_table[256] = {
+ };
+ EXPORT_SYMBOL(octeon_should_swizzle_table);
+ 
+-static unsigned long long max_memory = ULLONG_MAX;
++static unsigned long long max_memory = 512ull << 20;
+ static unsigned long long reserve_low_mem;
+ 
+ /*
+-- 
+2.25.1
+

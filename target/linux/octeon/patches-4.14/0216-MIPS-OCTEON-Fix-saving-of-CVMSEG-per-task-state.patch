@@ -1,0 +1,54 @@
+From cc2c68ee8652bf1c04b3f3985375b1a4f0e7126f Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Tue, 7 May 2019 12:51:44 +0200
+Subject: [PATCH 216/345] MIPS: OCTEON: Fix saving of CVMSEG per-task state.
+
+By disabling CVMSEGENAU in octeon_prepare_arch_switch() we were
+inadvertently disabling the saving of the CVMSEG state in the resume()
+function.
+
+The fix: Let resume() handle saving of the CVMSEG state, and clearing
+of CVMSEGENAU.  The do_ade() handler will then conditionally enable
+CVMSEGENAU.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Peter Swain <pswain@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/kernel/octeon-cpu.c | 1 -
+ arch/mips/kernel/unaligned.c  | 7 +++++++
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/arch/mips/kernel/octeon-cpu.c b/arch/mips/kernel/octeon-cpu.c
+index efe20723d8fd..c601fdbc94f0 100644
+--- a/arch/mips/kernel/octeon-cpu.c
++++ b/arch/mips/kernel/octeon-cpu.c
+@@ -50,7 +50,6 @@ void octeon_prepare_arch_switch(struct task_struct *next)
+ 
+ #if defined(CONFIG_CAVIUM_OCTEON_USER_IO_PER_PROCESS)
+ 	cvmmemctl.s.xkioenau = test_tsk_thread_flag(group_leader, TIF_XKPHYS_IO_EN) ? 1 : 0;
+-	cvmmemctl.s.cvmsegenau = test_tsk_thread_flag(group_leader, TIF_XKPHYS_IO_EN) ? 1 : 0;
+ #endif
+ 	write_c0_cvmmemctl(cvmmemctl.u64);
+ }
+diff --git a/arch/mips/kernel/unaligned.c b/arch/mips/kernel/unaligned.c
+index 893a56c6aad0..cf312fe49dad 100644
+--- a/arch/mips/kernel/unaligned.c
++++ b/arch/mips/kernel/unaligned.c
+@@ -2348,6 +2348,13 @@ asmlinkage void do_ade(struct pt_regs *regs)
+ 	 */
+ 	if ((regs->cp0_badvaddr >= CVMSEG_IO && regs->cp0_badvaddr < CVMSEG_IO_END) ||
+ 	    (regs->cp0_badvaddr >= CVMSEG_BASE && regs->cp0_badvaddr < CVMSEG_BASE + cvmseg_size)) {
++#if defined(CONFIG_CAVIUM_OCTEON_USER_IO_PER_PROCESS)
++		struct task_struct *group_leader = current->group_leader;
++		if (!test_tsk_thread_flag(group_leader, TIF_XKPHYS_IO_EN)) {
++			prev_state = exception_enter();
++			goto sigbus;
++		}
++#endif
+ 		preempt_disable();
+ 		cvmmemctl = __read_64bit_c0_register($11, 7);
+ 		/* Make sure all async operations are done */
+-- 
+2.25.1
+

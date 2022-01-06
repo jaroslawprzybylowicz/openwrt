@@ -1,0 +1,94 @@
+From 729f7037a74bdd528822a13d2c1fae266c9264e3 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sun, 12 May 2019 22:39:30 +0200
+Subject: [PATCH 162/345] MIPS: OCTEON: Move L2 Cache probing code to setup.c
+
+When we run as a virtualized guest kernel, the CPU is disassociated
+from the OCTEON SoC's L2 cache, so we move the corresponding code to a
+SoC specific place.  This allows us to share c-octeon.c between both
+Normal and VM cases.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c       | 22 ++++++++++++++++++++++
+ arch/mips/include/asm/octeon/octeon.h |  1 +
+ arch/mips/mm/c-octeon.c               |  3 +++
+ 3 files changed, 26 insertions(+)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 8435581446c7..a1f7147fe6cc 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -582,6 +582,26 @@ void octeon_user_io_init(void)
+ 	write_c0_derraddr1(0);
+ }
+ 
++static void octeon_soc_scache_init(void)
++{
++	struct cpuinfo_mips *c = &current_cpu_data;
++	unsigned long scache_size = cvmx_l2c_get_cache_size_bytes();
++
++	c->scache.sets = cvmx_l2c_get_num_sets();
++	c->scache.ways = cvmx_l2c_get_num_assoc();
++	c->scache.waybit = ffs(scache_size / c->scache.ways) - 1;
++	c->scache.waysize = scache_size / c->scache.ways;
++	c->scache.linesz = 128;
++	c->scache.flags |= MIPS_CPU_PREFETCH;
++
++	c->tcache.flags |= MIPS_CACHE_NOT_PRESENT;
++
++	if (smp_processor_id() == 0)
++		pr_notice("Secondary unified cache %ldkB, %d-way, %d sets, linesize %d bytes.\n",
++			  scache_size >> 10, c->scache.ways,
++			  c->scache.sets, c->scache.linesz);
++}
++
+ /**
+  * Early entry point for arch setup
+  */
+@@ -593,6 +613,8 @@ void __init prom_init(void)
+ 	int i;
+ 	u64 t;
+ 	int argc;
++
++	octeon_scache_init = octeon_soc_scache_init;
+ 	/*
+ 	 * The bootloader passes a pointer to the boot descriptor in
+ 	 * $a3, this is available as fw_arg3.
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index f57df81deba1..67ed6fb608e3 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -470,6 +470,7 @@ void octeon_release_ipi_handler(int action);
+ 
+ #define OCTEON_DEBUG_UART 1
+ 
++extern void (*octeon_scache_init)(void);
+ int register_co_cache_error_notifier(struct notifier_block *nb);
+ int unregister_co_cache_error_notifier(struct notifier_block *nb);
+ #define CO_CACHE_ERROR_RECOVERABLE 0
+diff --git a/arch/mips/mm/c-octeon.c b/arch/mips/mm/c-octeon.c
+index 03ee2ba4c6b0..d88d2f00fffa 100644
+--- a/arch/mips/mm/c-octeon.c
++++ b/arch/mips/mm/c-octeon.c
+@@ -322,6 +322,7 @@ static int octeon3_mcheck_handler(struct pt_regs *regs)
+ 	return MIPS_MC_NOT_HANDLED;
+ }
+ 
++void (*octeon_scache_init)(void);
+ /**
+  * Probe Octeon's caches
+  *
+@@ -416,6 +417,8 @@ static void probe_octeon(void)
+ 			  dcache_size >> 10, c->dcache.ways,
+ 			  c->dcache.sets, c->dcache.linesz);
+ 	}
++	if (octeon_scache_init)
++		octeon_scache_init();
+ }
+ 
+ static void  octeon_cache_error_setup(void)
+-- 
+2.25.1
+

@@ -1,0 +1,31 @@
+From 2e923d3d009775af7f16430ad72d6975455288f0 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Wed, 12 Jun 2019 17:42:13 +0200
+Subject: [PATCH 318/345] edac:octeon: Check if device is present before
+ removing.
+
+Check if L2C controller is present before removing the device.
+Fixes the issue reported in OCTEONTX-9022.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ drivers/edac/octeon_edac-l2c.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/edac/octeon_edac-l2c.c b/drivers/edac/octeon_edac-l2c.c
+index 77c72293ac19..36bf056478c1 100644
+--- a/drivers/edac/octeon_edac-l2c.c
++++ b/drivers/edac/octeon_edac-l2c.c
+@@ -579,7 +579,8 @@ static int octeon_l2c_remove(struct platform_device *pdev)
+ 	struct edac_device_ctl_info *l2c = platform_get_drvdata(pdev);
+ 
+ 	edac_device_del_device(&pdev->dev);
+-	edac_device_free_ctl_info(l2c);
++	if (l2c)
++		edac_device_free_ctl_info(l2c);
+ 
+ 	return 0;
+ }
+-- 
+2.25.1
+

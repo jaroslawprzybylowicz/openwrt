@@ -1,0 +1,94 @@
+From 6fc7bf8d2ad53493c8e5432f41ade222d59036ea Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Wed, 8 May 2019 18:27:15 +0200
+Subject: [PATCH 182/345] MIPS/EDAC: Use correct fields for printing error
+ message for O3 model
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ drivers/edac/octeon_edac-l2c.c | 28 ++++++++++++++++++++++++----
+ drivers/edac/octeon_edac-lmc.c | 14 ++++++++++----
+ 2 files changed, 34 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/edac/octeon_edac-l2c.c b/drivers/edac/octeon_edac-l2c.c
+index 6001618d771e..75f47a902c5e 100644
+--- a/drivers/edac/octeon_edac-l2c.c
++++ b/drivers/edac/octeon_edac-l2c.c
+@@ -183,6 +183,7 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ {
+ 	union cvmx_l2c_tqdx_err tqdx_err;
+ 	union cvmx_l2c_ttgx_err ttgx_err;
++	union cvmx_l2c_tadx_err l2c_err;
+ 	union cvmx_l2c_tadx_int l2c_reset;
+ 	int way, l2idx;
+ 
+@@ -237,10 +238,16 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ 	}
+ 
+ 	ttgx_err.u64 = cvmx_read_csr(CVMX_L2C_TTGX_ERR(tad));
+-	way = OCTEON_IS_MODEL(OCTEON_CN70XX) ? ttgx_err.cn70xx.way
+-				: ttgx_err.cn78xx.way;
+-	l2idx = OCTEON_IS_MODEL(OCTEON_CN70XX) ? ttgx_err.cn70xx.l2idx
+-				: ttgx_err.cn78xx.l2idx;
++	if (OCTEON_IS_MODEL(OCTEON_CN70XX)) {
++		way = ttgx_err.cn70xx.way;
++		l2idx = ttgx_err.cn70xx.l2idx;
++	} else if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
++		way = ttgx_err.cn78xx.way;
++		l2idx = ttgx_err.cn78xx.l2idx;
++	} else {
++		way = ttgx_err.cn73xx.way;
++		l2idx = ttgx_err.cn73xx.l2idx;
++	}
+ 
+ 	if (ttgx_err.s.tagdbe || ttgx_err.s.tagsbe)
+ 		snprintf(buf1, sizeof(buf1),
+@@ -259,6 +266,19 @@ static void _octeon_l2c_poll_oct3(struct edac_device_ctl_info *l2c, int tad)
+ 		l2c_reset.cn70xx.tagsbe = 1;
+ 		edac_device_handle_ce(l2c, tad, 0, buf2);
+ 	}
++
++	l2c_err.u64 = cvmx_read_csr(CVMX_L2C_TADX_ERR(tad));
++	if (l2c_err.s.bigrd) {
++		snprintf(buf1, sizeof(buf1),
++			"Read reference past L2C_BIG_CTL[MAXDRAM] occurred:");
++		l2c_reset.cn70xx.bigrd = true;
++	}
++	if (l2c_err.s.bigwr) {
++		snprintf(buf1, sizeof(buf1),
++			"Write reference past L2C_BIG_CTL[MAXDRAM] occurred:");
++		l2c_reset.cn70xx.bigwr = true;
++	}
++
+ 	if (l2c_reset.u64)
+ 		cvmx_write_csr(CVMX_L2C_TADX_INT(tad), l2c_reset.u64);
+ }
+diff --git a/drivers/edac/octeon_edac-lmc.c b/drivers/edac/octeon_edac-lmc.c
+index 62cd3c92e63a..00d0015b2a22 100644
+--- a/drivers/edac/octeon_edac-lmc.c
++++ b/drivers/edac/octeon_edac-lmc.c
+@@ -96,10 +96,16 @@ static void octeon_lmc_edac_poll_o2(struct mem_ctl_info *mci)
+ 			fadr.cn61xx.frow = pvt->row;
+ 			fadr.cn61xx.fcol = pvt->col;
+ 		}
+-		snprintf(msg, sizeof(msg),
+-			 "DIMM %d rank %d bank %d row %d col %d",
+-			 fadr.cn61xx.fdimm, fadr.cn61xx.fbunk,
+-			 fadr.cn61xx.fbank, fadr.cn61xx.frow, fadr.cn61xx.fcol);
++		if (OCTEON_IS_OCTEON3())
++			snprintf(msg, sizeof(msg),
++				"DIMM %d rank %d bank %d row %d col %d",
++				fadr.cn70xx.fdimm, fadr.cn70xx.fbunk,
++				fadr.cn70xx.fbank, fadr.cn70xx.frow, fadr.cn70xx.fcol);
++		else
++			snprintf(msg, sizeof(msg),
++				"DIMM %d rank %d bank %d row %d col %d",
++				fadr.cn61xx.fdimm, fadr.cn61xx.fbunk,
++				fadr.cn61xx.fbank, fadr.cn61xx.frow, fadr.cn61xx.fcol);
+ 	}
+ 
+ 	if (int_reg.s.sec_err) {
+-- 
+2.25.1
+

@@ -1,0 +1,30 @@
+From 7ebd2e5c41dbc0fc923fa5129c70d297a0bb267e Mon Sep 17 00:00:00 2001
+From: Peter Swain <peter.swain@marvell.com>
+Date: Wed, 5 Jun 2019 20:31:51 +0200
+Subject: [PATCH 323/345] EDAC:Octeon: undeclared variable when
+ CONFIG_EDAC_DEBUG=y
+
+commit ead92202 (EDAC:Octeon: Fixed EDAC support for OcteonII and OcteonIII)
+introduced an undeclared 'ret' under CONFIG_EDAC_DEBUG=y
+
+Signed-off-by: Peter Swain <peter.swain@marvell.com>
+---
+ drivers/edac/octeon_edac-lmc.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/edac/octeon_edac-lmc.c b/drivers/edac/octeon_edac-lmc.c
+index ce809a7bcee6..d32b7b37e23b 100644
+--- a/drivers/edac/octeon_edac-lmc.c
++++ b/drivers/edac/octeon_edac-lmc.c
+@@ -706,7 +706,7 @@ static int octeon_lmc_edac_probe(struct platform_device *pdev)
+ 		cvmx_write_csr_node(node, CVMX_LMCX_INT_EN(intf), en.u64);
+ #ifdef CONFIG_EDAC_DEBUG
+ 		if (IS_ENABLED(CONFIG_EDAC_DEBUG)) {
+-			ret = octeon_create_debugfs_nodes(mci->debugfs,
++			int ret = octeon_create_debugfs_nodes(mci->debugfs,
+ 							  lmc_dfs_ents, lmc,
+ 							  ARRAY_SIZE(lmc_dfs_ents));
+ 			if (ret != ARRAY_SIZE(lmc_dfs_ents)) {
+-- 
+2.25.1
+

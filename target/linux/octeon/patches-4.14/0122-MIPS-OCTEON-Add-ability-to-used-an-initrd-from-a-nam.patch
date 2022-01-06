@@ -1,0 +1,153 @@
+From fcc4e97a91d1c102598c63a384d68216600f10a1 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sun, 12 May 2019 12:52:32 +0200
+Subject: [PATCH 122/345] MIPS: OCTEON: Add ability to used an initrd from a
+ named memory block.
+
+If 'rd_name=xxx' is passed to the kernel, the named block with name
+'xxx' is used for the initrd.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <carlos.munoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c  | 36 ++++++++++++++++++++++++++++----
+ arch/mips/include/asm/bootinfo.h |  1 +
+ arch/mips/kernel/setup.c         | 18 +++++++++++++---
+ 3 files changed, 48 insertions(+), 7 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 049e7cb9ea88..fb042ae5629d 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -28,6 +28,7 @@
+ #include <linux/of_fdt.h>
+ #include <linux/libfdt.h>
+ #include <linux/kexec.h>
++#include <linux/initrd.h>
+ 
+ #include <asm/processor.h>
+ #include <asm/reboot.h>
+@@ -295,6 +296,9 @@ static int octeon_uart;
+ 
+ extern asmlinkage void handle_int(void);
+ 
++/* If an initrd named block is specified, its name goes here. */
++static char rd_name[64] __initdata;
++
+ /**
+  * Return non zero if we are currently running in the Octeon simulator
+  *
+@@ -1024,6 +1028,10 @@ void __init prom_init(void)
+ 				max_memory = 32ull << 30;
+ 			if (*p == '@')
+ 				reserve_low_mem = memparse(p + 1, &p);
++		} else if (strncmp(arg, "rd_name=", 8) == 0) {
++			strncpy(rd_name, arg + 8, sizeof(rd_name));
++			rd_name[sizeof(rd_name) - 1] = 0;
++			goto append_arg;
+ #ifdef CONFIG_KEXEC
+ 		} else if (strncmp(arg, "crashkernel=", 12) == 0) {
+ 			crashk_size = memparse(arg+12, &p);
+@@ -1036,11 +1044,14 @@ void __init prom_init(void)
+ 			 * parse_crashkernel(arg, sysinfo->system_dram_size,
+ 			 *		  &crashk_size, &crashk_base);
+ 			 */
++			goto append_arg;
+ #endif
+-		} else if (strlen(arcs_cmdline) + strlen(arg) + 1 <
+-			   sizeof(arcs_cmdline) - 1) {
+-			strcat(arcs_cmdline, " ");
+-			strcat(arcs_cmdline, arg);
++		} else {
++append_arg:
++			if (strlen(arcs_cmdline) + strlen(arg) + 1 < sizeof(arcs_cmdline) - 1) {
++				strcat(arcs_cmdline, " ");
++				strcat(arcs_cmdline, arg);
++			}
+ 		}
+ 	}
+ 
+@@ -1126,6 +1137,23 @@ void __init plat_mem_setup(void)
+ 	total = 0;
+ 	crashk_end = 0;
+ 
++#ifdef CONFIG_BLK_DEV_INITRD
++
++	if (rd_name[0]) {
++		const struct cvmx_bootmem_named_block_desc *initrd_block;
++
++		initrd_block = cvmx_bootmem_find_named_block(rd_name);
++		if (initrd_block != NULL) {
++			initrd_start = initrd_block->base_addr + PAGE_OFFSET;
++			initrd_end = initrd_start + initrd_block->size;
++			add_memory_region(initrd_block->base_addr, initrd_block->size,
++					  BOOT_MEM_INIT_RAM);
++			initrd_in_reserved = 1;
++			total += initrd_block->size;
++		}
++	}
++#endif
++
+ 	/*
+ 	 * The Mips memory init uses the first memory location for
+ 	 * some memory vectors. When SPARSEMEM is in use, it doesn't
+diff --git a/arch/mips/include/asm/bootinfo.h b/arch/mips/include/asm/bootinfo.h
+index e26a093bb17a..22a1062226a1 100644
+--- a/arch/mips/include/asm/bootinfo.h
++++ b/arch/mips/include/asm/bootinfo.h
+@@ -105,6 +105,7 @@ struct boot_mem_map {
+ };
+ 
+ extern struct boot_mem_map boot_mem_map;
++extern bool initrd_in_reserved;
+ 
+ extern void add_memory_region(phys_addr_t start, phys_addr_t size, long type);
+ extern void detect_memory_region(phys_addr_t start, phys_addr_t sz_min,  phys_addr_t sz_max);
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index 795caa763da3..bccce771ebb6 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -63,6 +63,7 @@ unsigned long mips_machtype __read_mostly = MACH_UNKNOWN;
+ EXPORT_SYMBOL(mips_machtype);
+ 
+ struct boot_mem_map boot_mem_map;
++bool initrd_in_reserved;
+ 
+ static char __initdata command_line[COMMAND_LINE_SIZE];
+ char __initdata arcs_cmdline[COMMAND_LINE_SIZE];
+@@ -384,8 +385,13 @@ static void __init bootmem_init(void)
+ 	 * as our memory range starting point. Once bootmem is inited we
+ 	 * will reserve the area used for the initrd.
+ 	 */
+-	init_initrd();
+-	reserved_end = (unsigned long) PFN_UP(__pa_symbol(&_end));
++	if (initrd_in_reserved) {
++		init_initrd();
++		reserved_end = PFN_UP(__pa_symbol(&_end));
++	} else {
++		reserved_end = max_t(unsigned long, init_initrd(),
++				     PFN_UP(__pa_symbol(&_end)));
++	}
+ 
+ 	/*
+ 	 * max_low_pfn is not a number of pages. The number of pages
+@@ -401,8 +407,14 @@ static void __init bootmem_init(void)
+ 	for (i = 0; i < boot_mem_map.nr_map; i++) {
+ 		unsigned long start, end;
+ 
+-		if (boot_mem_map.map[i].type != BOOT_MEM_RAM)
++		switch (boot_mem_map.map[i].type) {
++		case BOOT_MEM_RAM:
++		case BOOT_MEM_INIT_RAM:
++			break;
++		default:
++			/* Not usable memory */
+ 			continue;
++		}
+ 
+ 		start = PFN_UP(boot_mem_map.map[i].addr);
+ 		end = PFN_DOWN(boot_mem_map.map[i].addr
+-- 
+2.25.1
+

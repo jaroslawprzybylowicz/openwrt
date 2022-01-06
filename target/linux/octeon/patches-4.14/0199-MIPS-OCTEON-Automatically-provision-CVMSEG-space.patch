@@ -1,0 +1,285 @@
+From cc9ba0a9df2e1833398e011beb1b2e3b0e577a67 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sun, 5 May 2019 20:22:52 +0200
+Subject: [PATCH 199/345] MIPS: OCTEON: Automatically provision CVMSEG space.
+
+Remove CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE and automatically calculate
+the amount of CVMSEG space needed.
+
+1st 128-bytes: Use by IOBDMA
+2nd 128-bytes: Reserved by kernel for scratch/TLS emulation.
+3rd 128-bytes: OCTEON-III LMTLINE
+
+New config variable CONFIG_CAVIUM_OCTEON_EXTRA_CVMSEG provisions
+additional lines, defaults to zero.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/Kconfig               | 27 ++++++++++-------
+ arch/mips/cavium-octeon/setup.c               | 16 +++++-----
+ .../mach-cavium-octeon/kernel-entry-init.h    | 20 ++++++++-----
+ arch/mips/include/asm/mipsregs.h              |  6 ++--
+ arch/mips/include/asm/octeon/octeon.h         |  2 ++
+ arch/mips/include/asm/processor.h             |  2 +-
+ arch/mips/kernel/unaligned.c                  | 30 +++++++++----------
+ 7 files changed, 58 insertions(+), 45 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/Kconfig b/arch/mips/cavium-octeon/Kconfig
+index cd044186e151..095c2a865931 100644
+--- a/arch/mips/cavium-octeon/Kconfig
++++ b/arch/mips/cavium-octeon/Kconfig
+@@ -19,21 +19,26 @@ config CAVIUM_CN63XXP1
+ 	  workarounds will cause a slight decrease in performance on
+ 	  non-CN6XXX hardware.
+ 
+-config CAVIUM_OCTEON_CVMSEG_SIZE
+-	int "Number of L1 cache lines reserved for CVMSEG memory"
+-	range 2 54
+-	default 2
+-	help
+-	  CVMSEG LM is a segment that accesses portions of the dcache as a
+-	  local memory; the larger CVMSEG is, the smaller the cache is.
+-	  This selects the size of CVMSEG LM, which is in cache blocks. The
+-	  legally range is from 2 to 54 cache blocks (i.e. CVMSEG LM is
+-	  between zero and 6192 bytes).
+-
+ endif # CPU_CAVIUM_OCTEON
+ 
+ if CAVIUM_OCTEON_SOC
+ 
++config CAVIUM_OCTEON_EXTRA_CVMSEG
++	int "Number of extra L1 cache lines reserved for CVMSEG memory"
++	range 0 50
++	default 0
++	help
++	  CVMSEG LM is a segment that accesses portions of the dcache
++	  as a local memory; the larger CVMSEG is, the smaller the
++	  cache is.  The kernel uses two or three blocks (one for TLB
++	  exception handlers, one for driver IOBDMA operations, and on
++	  models that need it, one for LMTDMA operations). This
++	  selects an optional extra number of CVMSEG lines for use by
++	  other software.
++
++	  Normally no extra lines are required, and this parameter
++	  should be set to zero.
++
+ config FAST_ACCESS_TO_THREAD_POINTER
+ 	bool "Enable fast access to the thread pointer"
+ 	default "y"
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 3caebb1d9bd5..0cd00eb85b54 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -72,6 +72,12 @@ EXPORT_SYMBOL(octeon_should_swizzle_table);
+ static unsigned long long max_memory = ULLONG_MAX;
+ static unsigned long long reserve_low_mem;
+ 
++/*
++ * modified in hernel-entry-init.h, must have an initial value to keep
++ * it from being clobbered when bss is zeroed.
++ */
++u32 octeon_cvmseg_lines = 2;
++
+ DEFINE_SEMAPHORE(octeon_bootbus_sem);
+ EXPORT_SYMBOL(octeon_bootbus_sem);
+ 
+@@ -530,7 +536,6 @@ void octeon_user_io_init(void)
+ 
+ 	/* R/W If set, CVMSEG is available for loads/stores in
+ 	 * kernel/debug mode. */
+-#if CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0
+ 	cvmmemctl.s.cvmsegenak = 1;
+ 	if (octeon_has_feature(OCTEON_FEATURE_PKO3)) {
+ 		/* Enable LMTDMA */
+@@ -538,9 +543,6 @@ void octeon_user_io_init(void)
+ 		/* Scratch line to use for LMT operation */
+ 		cvmmemctl.s.lmtline = 2;
+ 	}
+-#else
+-	cvmmemctl.s.cvmsegenak = 0;
+-#endif
+ 	/* R/W If set, CVMSEG is available for loads/stores in
+ 	 * supervisor mode. */
+ 	cvmmemctl.s.cvmsegenas = 0;
+@@ -558,9 +560,9 @@ void octeon_user_io_init(void)
+ 
+ 	/* Setup of CVMSEG is done in kernel-entry-init.h */
+ 	if (smp_processor_id() == 0)
+-		pr_notice("CVMSEG size: %d cache lines (%d bytes)\n",
+-			  CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE,
+-			  CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE * 128);
++		pr_notice("CVMSEG size: %u cache lines (%u bytes)\n",
++			  octeon_cvmseg_lines,
++			  octeon_cvmseg_lines * 128);
+ 
+ 	if (current_cpu_type() != CPU_CAVIUM_OCTEON3 ||
+ 	    OCTEON_IS_MODEL(OCTEON_CN70XX)) {
+diff --git a/arch/mips/include/asm/mach-cavium-octeon/kernel-entry-init.h b/arch/mips/include/asm/mach-cavium-octeon/kernel-entry-init.h
+index e3f633e6c0f7..5294efb3f5fb 100644
+--- a/arch/mips/include/asm/mach-cavium-octeon/kernel-entry-init.h
++++ b/arch/mips/include/asm/mach-cavium-octeon/kernel-entry-init.h
+@@ -154,11 +154,18 @@ FEXPORT(octeon_hotplug_entry)
+ 	jr	v0
+ 
+ continue_in_mapped_space:
++	mfc0	v1, CP0_PRID_REG
++	andi	v1, 0xff00
++	li	v0, 0x9500		# cn78XX or later
++	subu	v1, v1, v0
++	li	t2, 2 + CONFIG_CAVIUM_OCTEON_EXTRA_CVMSEG
++	bltz	v1, 1f
++	addiu	t2, 1			# t2 has cvmseg_size
++1:
+ 	# Read the cavium mem control register
+ 	dmfc0	v0, CP0_CVMMEMCTL_REG
+ 	# Clear the lower 6 bits, the CVMSEG size
+-	dins	v0, $0, 0, 6
+-	ori	v0, CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE
++	dins	v0, t2, 0, 6
+ 	dmtc0	v0, CP0_CVMMEMCTL_REG	# Write the cavium mem control register
+ 	dmfc0	v0, CP0_CVMCTL_REG	# Read the cavium control register
+ 	# Disable unaligned load/store support but leave HW fixup enabled
+@@ -208,7 +215,7 @@ FEXPORT(octeon_hotplug_entry)
+ #endif
+ 
+ 	# Zero all of CVMSEG to make sure parity is correct
+-	dli	v0, CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE
++	move	v0, t2
+ 	dsll	v0, 7
+ 	beqz	v0, 2f
+ 1:	dsubu	v0, 8
+@@ -264,12 +271,7 @@ FEXPORT(octeon_hotplug_entry)
+ 	LONG_L	sp, (t0)
+ 	# Set the SP global variable to zero so the master knows we've started
+ 	LONG_S	zero, (t0)
+-#ifdef __OCTEON__
+-	syncw
+-	syncw
+-#else
+ 	sync
+-#endif
+ 	# Jump to the normal Linux SMP entry point
+ 	j   smp_bootstrap
+ 	nop
+@@ -286,6 +288,8 @@ FEXPORT(octeon_hotplug_entry)
+ 
+ #endif /* CONFIG_SMP */
+ octeon_main_processor:
++	dla	v0, octeon_cvmseg_lines
++	sw	t2, 0(v0)
+ 	.set pop
+ .endm
+ 
+diff --git a/arch/mips/include/asm/mipsregs.h b/arch/mips/include/asm/mipsregs.h
+index 63733e796d1c..ae045ec42a5e 100644
+--- a/arch/mips/include/asm/mipsregs.h
++++ b/arch/mips/include/asm/mipsregs.h
+@@ -1132,12 +1132,12 @@
+  * thread pointer from userspace. Octeon uses a 64bit location in
+  * CVMSEG to store the thread pointer for quick access.
+  *
+- * TLB refill uses location -16 (and below), fast access is -8 (both
+- * from the top of the area.
++ * We use the second CVMSEG line.  TLB refill uses location -16 (and
++ * below), fast access is -8 (both from the top of the area).
+  */
+ #ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+ #define FAST_ACCESS_THREAD_OFFSET			\
+-	(CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE * 128 - 8 - 32768)
++	(2 * 128 - 8 - 32768)
+ #define FAST_ACCESS_THREAD_REGISTER			\
+ 	(*(unsigned long *)(FAST_ACCESS_THREAD_OFFSET))
+ #endif
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index a49bf0311386..606b6a7e94f3 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -430,6 +430,8 @@ static inline uint32_t octeon_npi_read32(uint64_t address)
+ 
+ extern struct cvmx_bootinfo *octeon_bootinfo;
+ 
++extern u32 octeon_cvmseg_lines;
++
+ static inline uint64_t octeon_read_ptp_csr(u64 csr)
+ {
+ 	if (OCTEON_IS_MODEL(OCTEON_CN63XX_PASS1_X)) {
+diff --git a/arch/mips/include/asm/processor.h b/arch/mips/include/asm/processor.h
+index 044aa53e4f2f..237545630b30 100644
+--- a/arch/mips/include/asm/processor.h
++++ b/arch/mips/include/asm/processor.h
+@@ -216,7 +216,7 @@ struct octeon_cop2_state {
+ 	.cp2			= {0,},
+ 
+ struct octeon_cvmseg_state {
+-	unsigned long cvmseg[CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE]
++	unsigned long cvmseg[CONFIG_CAVIUM_OCTEON_EXTRA_CVMSEG + 3]
+ 			    [cpu_dcache_line_size() / sizeof(unsigned long)];
+ };
+ 
+diff --git a/arch/mips/kernel/unaligned.c b/arch/mips/kernel/unaligned.c
+index c64d40e9ecbf..893a56c6aad0 100644
+--- a/arch/mips/kernel/unaligned.c
++++ b/arch/mips/kernel/unaligned.c
+@@ -2318,23 +2318,25 @@ static void emulate_load_store_MIPS16e(struct pt_regs *regs, void __user * addr)
+ 	    ("Unhandled kernel unaligned access or invalid instruction", regs);
+ 	force_sig(SIGILL, current);
+ }
+-
++#ifdef CONFIG_CPU_CAVIUM_OCTEON
++#include <asm/octeon/octeon.h>
++#endif
+ asmlinkage void do_ade(struct pt_regs *regs)
+ {
+ 	enum ctx_state prev_state;
+ 	unsigned int __user *pc;
+ 	mm_segment_t seg;
+-#if defined(CONFIG_CPU_CAVIUM_OCTEON) && (CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0)
++#ifdef CONFIG_CPU_CAVIUM_OCTEON
+ 	const unsigned long CVMSEG_BASE	= 0xffffffffffff8000ul;
+ 	const unsigned long CVMSEG_IO		= 0xffffffffffffa000ul;
+ 	const unsigned long CVMSEG_IO_END	= 0xffffffffffffc000ul;
+-	u64 cvmmemctl			= __read_64bit_c0_register($11, 7);
+-	unsigned long cvmseg_size	= (cvmmemctl & 0x3f) * 128;
++	u64 cvmmemctl;
++	unsigned long cvmseg_size	= octeon_cvmseg_lines * 128;
+ #endif
+ 
+ 	prev_state = exception_enter();
+ 
+-#if defined(CONFIG_CPU_CAVIUM_OCTEON) && (CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0)
++#ifdef CONFIG_CPU_CAVIUM_OCTEON
+ 	/*
+ 	 * Allows tasks to access CVMSEG addresses. These are special
+ 	 * addresses into the Octeon L1 Cache that can be used as fast
+@@ -2353,19 +2355,17 @@ asmlinkage void do_ade(struct pt_regs *regs)
+ 		/* Enable userspace access to CVMSEG */
+ 		cvmmemctl |= 1 << 6;
+ 		__write_64bit_c0_register($11, 7, cvmmemctl);
+-# ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+ 		/*
+ 		 * Restore the processes CVMSEG data. Leave off the
+-		 * last 8 bytes since the kernel stores the thread
+-		 * pointer there.
++		 * second 128 bytes since they are reserved for kernel use.
+ 		 */
+-		memcpy((void *)CVMSEG_BASE, current->thread.cvmseg.cvmseg,
+-		       cvmseg_size - 8);
+-# else
+-		/* Restore the processes CVMSEG data */
+-		memcpy((void *)CVMSEG_BASE, current->thread.cvmseg.cvmseg,
+-		       cvmseg_size);
+-# endif
++		if (octeon_cvmseg_lines > 0)
++			memcpy((void *)(CVMSEG_BASE + 0), current->thread.cvmseg.cvmseg[0],
++			       128);
++		if (octeon_cvmseg_lines > 2)
++			memcpy((void *)(CVMSEG_BASE + 256), current->thread.cvmseg.cvmseg[2],
++			       cvmseg_size - 256);
++
+ 		preempt_enable();
+ 		return;
+ 	}
+-- 
+2.25.1
+

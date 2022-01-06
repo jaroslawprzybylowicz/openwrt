@@ -1,0 +1,307 @@
+From 7bd50563b7230196890efe20e84462a1d3785524 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Tue, 7 May 2019 14:33:19 +0200
+Subject: [PATCH 296/345] Added callback functions and structure definitions.
+
+These will be used by cavium ipfwd offload module.
+
+Signed-off-by: Abhijit Ayarekar <abhijit.ayarekar@caviumnetworks.com>
+---
+ drivers/net/Kconfig       |  24 ++++++++
+ include/linux/netdevice.h |  13 ++++
+ include/linux/skbuff.h    | 126 ++++++++++++++++++++++++++++++++++++++
+ net/core/dev.c            |  36 +++++++++++
+ net/core/skbuff.c         |   3 +
+ 5 files changed, 202 insertions(+)
+
+diff --git a/drivers/net/Kconfig b/drivers/net/Kconfig
+index aba0d652095b..821a4cf0b7a2 100644
+--- a/drivers/net/Kconfig
++++ b/drivers/net/Kconfig
+@@ -485,4 +485,28 @@ config FUJITSU_ES
+ 
+ source "drivers/net/hyperv/Kconfig"
+ 
++config CAVIUM_NET_PACKET_FWD_OFFLOAD
++	bool "Enable Cavium Octeon packet forwarding offload support"
++	default "n"
++	help
++	  This is required for Cavium Octeon ipfwd-offload/bridge offload modules.
++	  ipfwd offload and bridge offload modules use packet
++	  sending functionality exposed by this config.
++
++config CAVIUM_IPFWD_OFFLOAD
++	bool "Enable Cavium Octeon ip-offload module"
++	default "n"
++	depends on CAVIUM_NET_PACKET_FWD_OFFLOAD
++	help
++	  This enables packet callbacks for Cavium Octeon ipfwd-offload module.
++	  ipfwd-offload module can offload packet switching for
++	  tcp/udp/vlan/pppoe/gre packets over IPv4 and IPv6.
++
++config CAVIUM_BRIDGE_OFFLOAD
++	bool "Enable Cavium Octeon bridge module"
++	default "n"
++	depends on CAVIUM_NET_PACKET_FWD_OFFLOAD
++	help
++	  This enables Cavium Octeon bridge module.
++
+ endif # NETDEVICES
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index 56fec8fdebe1..0ea9833e6fb2 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -1935,6 +1935,9 @@ struct net_device {
+ 	struct lock_class_key	*qdisc_tx_busylock;
+ 	struct lock_class_key	*qdisc_running_key;
+ 	bool			proto_down;
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++	u8 is_cvm_dev;
++#endif
+ };
+ #define to_net_dev(d) container_of(d, struct net_device, dev)
+ 
+@@ -4492,4 +4495,14 @@ do {								\
+ #define PTYPE_HASH_SIZE	(16)
+ #define PTYPE_HASH_MASK	(PTYPE_HASH_SIZE - 1)
+ 
++#ifdef CONFIG_CAVIUM_BRIDGE_OFFLOAD
++extern u32 (*cvm_br_rx_hook)(struct sk_buff *);
++#endif
++
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++/* Cavium fast-path rx/tx hooks */
++extern u32 (*cvm_ipfwd_rx_hook)(struct sk_buff *);
++extern int (*cvm_ipfwd_tx_hook)(struct sk_buff *);
++#endif
++
+ #endif	/* _LINUX_NETDEVICE_H */
+diff --git a/include/linux/skbuff.h b/include/linux/skbuff.h
+index 44c56b26fd6b..5492164ad90e 100644
+--- a/include/linux/skbuff.h
++++ b/include/linux/skbuff.h
+@@ -582,6 +582,129 @@ typedef unsigned int sk_buff_data_t;
+ typedef unsigned char *sk_buff_data_t;
+ #endif
+ 
++#ifdef CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD
++
++struct iphdr_new {
++#if defined(__LITTLE_ENDIAN_BITFIELD)
++	__u8    ihl:4,
++			version:4;
++#elif defined(__BIG_ENDIAN_BITFIELD)
++	__u8    version:4,
++			ihl:4;
++#else
++#error  "Please fix <asm/byteorder.h>"
++#endif
++	__u8    tos;
++	__be16  tot_len;
++	__be16  id;
++	__be16  frag_off;
++	__u8    ttl;
++	__u8    protocol;
++	__sum16 check;
++	__be32  saddr;
++	__be32  daddr;
++	/*The options start here. */
++};
++
++struct ipv6hdr_new {
++#if defined(__LITTLE_ENDIAN_BITFIELD)
++	__u8		priority:4,
++				version:4;
++#elif defined(__BIG_ENDIAN_BITFIELD)
++	__u8		version:4,
++				priority:4;
++#else
++#error	"Please fix <asm/byteorder.h>"
++#endif
++	__u8			flow_lbl[3];
++
++	__be16			payload_len;
++	__u8			nexthdr;
++	__u8			hop_limit;
++
++	uint64_t                saddrhi;
++	uint64_t                saddrlo;
++	uint64_t                daddrhi;
++	uint64_t                daddrlo;
++};
++
++struct cvm_udphdr {
++	__be16	source;
++	__be16	dest;
++	__be16	len;
++	__sum16	check;
++};
++
++struct cvm_pppoe_hdr {
++#if defined(__LITTLE_ENDIAN_BITFIELD)
++	__u8 ver : 4;
++	__u8 type : 4;
++#elif defined(__BIG_ENDIAN_BITFIELD)
++	__u8 type : 4;
++	__u8 ver : 4;
++#else
++#error  "Please fix <asm/byteorder.h>"
++#endif
++	__u8 code;
++	__be16 sid;
++	__be16 length;
++};
++
++struct cvm_vlan_hdr {
++	__be16 h_vlan_TCI;
++	__be16 h_vlan_encapsulated_proto;
++};
++
++struct cvm_vxlan_hdr {
++	__be32 vx_flags;
++	__be32 vx_vni;
++};
++
++struct gre_hdr_info {
++	__be16 flags;
++	__be16 protocol;
++	__be32 key;
++	__be32 headroom;
++};
++
++
++struct cvm_packet_info {
++	unsigned long		rx_pkt_flags;
++	unsigned long		tx_pkt_flags;
++	u32			cookie;		/* magic number */
++	void			*bucket;	/* bucket ptr */
++	void			*frag_bucket;	/* Frag bucket ptr */
++	u32			seq;	/* TCP seq number (if present) */
++	u32			ack_seq; /* TCP ack number (if present) */
++	int			qos_level;
++	struct cvm_vlan_hdr	vlan;
++	struct cvm_vxlan_hdr	vxlan;
++	struct cvm_pppoe_hdr	pppoe;
++	struct gre_hdr_info	gre;
++	union {
++		struct iphdr_new	outer_ip4;	/* IP header */
++		struct ipv6hdr_new	outer_ip6;
++	};
++	struct cvm_udphdr	outer_udp;
++	union {
++		struct {
++			u32			old_reserved1;
++			struct iphdr_new	cvm_ip;	/* IP header */
++			u64			reserved2[2];
++		} cvm_ip4;
++		struct ipv6hdr_new  cvm_ip6;
++	} cvm_ip4_ip6_u;
++	u64	reserved2[2];	/* L4 ports and reserved */
++#define cvmip                            cvm_ip4_ip6_u.cvm_ip4.cvm_ip
++#define cvmip6                           cvm_ip4_ip6_u.cvm_ip6
++};
++#endif
++
++
++
++
++
++
+ /** 
+  *	struct sk_buff - socket buffer
+  *	@next: Next buffer in list
+@@ -828,6 +951,9 @@ struct sk_buff {
+ 	__u16			transport_header;
+ 	__u16			network_header;
+ 	__u16			mac_header;
++#ifdef CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD
++	struct cvm_packet_info	cvm_info;
++#endif
+ 
+ 	/* private: */
+ 	__u32			headers_end[0];
+diff --git a/net/core/dev.c b/net/core/dev.c
+index 60b61370ee56..7aef4f1614fc 100644
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -358,6 +358,19 @@ static inline void netdev_set_addr_lockdep_class(struct net_device *dev)
+ }
+ #endif
+ 
++#ifdef CONFIG_CAVIUM_BRIDGE_OFFLOAD
++u32 (*cvm_br_rx_hook)(struct sk_buff *);
++EXPORT_SYMBOL(cvm_br_rx_hook);
++#endif
++
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++u32 (*cvm_ipfwd_rx_hook)(struct sk_buff *);
++EXPORT_SYMBOL(cvm_ipfwd_rx_hook);
++
++int (*cvm_ipfwd_tx_hook)(struct sk_buff *);
++EXPORT_SYMBOL(cvm_ipfwd_tx_hook);
++#endif
++
+ /*******************************************************************************
+  *
+  *		Protocol management and registration routines
+@@ -3447,6 +3460,12 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+ 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_SCHED_TSTAMP))
+ 		__skb_tstamp_tx(skb, NULL, skb->sk, SCM_TSTAMP_SCHED);
+ 
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++	if (cvm_ipfwd_tx_hook) {
++		if (cvm_ipfwd_tx_hook(skb) == (-ENOMEM))
++			goto out_kfree_skb;
++	}
++#endif
+ 	/* Disable soft irqs for various locks below. Also
+ 	 * stops preemption for RCU.
+ 	 */
+@@ -3533,6 +3552,9 @@ static int __dev_queue_xmit(struct sk_buff *skb, void *accel_priv)
+ 	rc = -ENETDOWN;
+ 	rcu_read_unlock_bh();
+ 
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++out_kfree_skb:
++#endif
+ 	atomic_long_inc(&dev->tx_dropped);
+ 	kfree_skb_list(skb);
+ 	return rc;
+@@ -4340,6 +4362,20 @@ static int __netif_receive_skb_core(struct sk_buff *skb, bool pfmemalloc)
+ 	int ret = NET_RX_DROP;
+ 	__be16 type;
+ 
++#ifdef CONFIG_CAVIUM_BRIDGE_OFFLOAD
++	if (cvm_br_rx_hook) {
++		if (!cvm_br_rx_hook(skb))
++			return NET_RX_SUCCESS;
++	}
++#endif
++
++#ifdef CONFIG_CAVIUM_IPFWD_OFFLOAD
++	if (cvm_ipfwd_rx_hook) {
++		if (!cvm_ipfwd_rx_hook(skb))
++			return NET_RX_SUCCESS;
++	}
++#endif
++
+ 	net_timestamp_check(!netdev_tstamp_prequeue, skb);
+ 
+ 	trace_netif_receive_skb(skb);
+diff --git a/net/core/skbuff.c b/net/core/skbuff.c
+index d8b8acbc32f1..d65e5dc66af1 100644
+--- a/net/core/skbuff.c
++++ b/net/core/skbuff.c
+@@ -853,6 +853,9 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+ #endif
+ #ifdef CONFIG_NET_SCHED
+ 	CHECK_SKB_FIELD(tc_index);
++#ifdef CONFIG_CAVIUM_NET_PACKET_FWD_OFFLOAD
++	CHECK_SKB_FIELD(cvm_info);
++#endif
+ #endif
+ 
+ }
+-- 
+2.25.1
+

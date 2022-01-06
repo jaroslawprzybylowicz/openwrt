@@ -1,0 +1,38 @@
+From 23c60b6c875695df4d3530ec6143ecf23bab920e Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Tue, 7 May 2019 16:32:38 +0200
+Subject: [PATCH 220/345] MIPS: kexec: Set memory limits to HIGHMEM_START.
+
+For 32bit kernels, there is no change.  For 64bit kernels, use any
+available system memory.
+
+There were allocation failures on some 64bit systems where there was
+not enough free low memory, this change fixes that.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/include/asm/kexec.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/arch/mips/include/asm/kexec.h b/arch/mips/include/asm/kexec.h
+index 493a3cc7c39a..ea29e2b1dffa 100644
+--- a/arch/mips/include/asm/kexec.h
++++ b/arch/mips/include/asm/kexec.h
+@@ -12,11 +12,11 @@
+ #include <asm/stacktrace.h>
+ 
+ /* Maximum physical address we can use pages from */
+-#define KEXEC_SOURCE_MEMORY_LIMIT (0x20000000)
++#define KEXEC_SOURCE_MEMORY_LIMIT HIGHMEM_START
+ /* Maximum address we can reach in physical address mode */
+-#define KEXEC_DESTINATION_MEMORY_LIMIT (0x20000000)
++#define KEXEC_DESTINATION_MEMORY_LIMIT HIGHMEM_START
+  /* Maximum address we can use for the control code buffer */
+-#define KEXEC_CONTROL_MEMORY_LIMIT (0x20000000)
++#define KEXEC_CONTROL_MEMORY_LIMIT HIGHMEM_START
+ /* Reserve 3*4096 bytes for board-specific info */
+ #define KEXEC_CONTROL_PAGE_SIZE (4096 + 3*4096)
+ 
+-- 
+2.25.1
+

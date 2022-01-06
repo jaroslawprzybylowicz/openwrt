@@ -1,0 +1,28 @@
+From b5f8ef04083ff8280906246414423aee2ab45338 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lma@semihalf.com>
+Date: Wed, 12 Jun 2019 13:50:00 +0200
+Subject: [PATCH 326/345] net: phy: Port 4.9 to 4.14 fixes
+
+---
+ drivers/net/phy/qca833x.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/phy/qca833x.c b/drivers/net/phy/qca833x.c
+index 3165b11d7f9b..ceadc53bfdc6 100644
+--- a/drivers/net/phy/qca833x.c
++++ b/drivers/net/phy/qca833x.c
+@@ -424,9 +424,9 @@ static struct phy_driver qca833x_driver = {
+ #ifdef QCA833X_IRQ
+ 	.ack_interrupt = qca833x_ack_interrupt,
+ 	.config_intr = qca833x_config_interrupt,
+-	.flags = PHY_HAS_MAGICANEG | PHY_HAS_INTERRUPT,
++	.flags = PHY_IS_INTERNAL| PHY_HAS_INTERRUPT,
+ #else /* !QCA833X_IRQ */
+-	.flags = PHY_HAS_MAGICANEG,
++	.flags = PHY_IS_INTERNAL,
+ #endif /* !QCA833X_IRQ */
+ };
+ 
+-- 
+2.25.1
+

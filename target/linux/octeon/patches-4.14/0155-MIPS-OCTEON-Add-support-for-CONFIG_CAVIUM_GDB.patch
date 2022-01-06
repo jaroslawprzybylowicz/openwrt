@@ -1,0 +1,75 @@
+From 4e1b0793995d0765b501b1dcacd53a9bcf01af63 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sun, 19 May 2019 13:48:51 +0200
+Subject: [PATCH 155/345] MIPS: OCTEON: Add support for CONFIG_CAVIUM_GDB
+
+The Cavium, Inc. Simple Executive debugger.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/Kconfig.debug               | 9 +++++++++
+ arch/mips/cavium-octeon/setup.c       | 5 +++++
+ arch/mips/include/asm/octeon/octeon.h | 2 ++
+ 3 files changed, 16 insertions(+)
+
+diff --git a/arch/mips/Kconfig.debug b/arch/mips/Kconfig.debug
+index 464af5e025d6..c4c2ecdc991d 100644
+--- a/arch/mips/Kconfig.debug
++++ b/arch/mips/Kconfig.debug
+@@ -88,6 +88,15 @@ config SB1XXX_CORELIS
+ 	  Select compile flags that produce code that can be processed by the
+ 	  Corelis mksym utility and UDB Emulator.
+ 
++config CAVIUM_GDB
++	bool "Remote GDB debugging using the Cavium Inc. Multicore GDB"
++	depends on DEBUG_KERNEL && CPU_CAVIUM_OCTEON && !KGDB
++	select DEBUG_INFO
++	help
++	  If you say Y here, it will be possible to remotely debug the MIPS
++	  kernel using the Cavium Inc. GDB with extended SMP support.
++	  This is only useful for kernel hackers. If unsure, say N.
++
+ config DEBUG_ZBOOT
+ 	bool "Enable compressed kernel support debugging"
+ 	depends on DEBUG_KERNEL && SYS_SUPPORTS_ZBOOT
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 7f60592ee892..d95506c054d6 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -43,6 +43,7 @@
+ #include <asm/octeon/pci-octeon.h>
+ #include <asm/octeon/cvmx-rst-defs.h>
+ #include <asm/octeon/cvmx-qlm.h>
++#include <asm/octeon/cvmx-debug.h>
+ 
+ /*
+  * TRUE for devices having registers with little-endian byte
+@@ -980,6 +981,10 @@ void __init prom_init(void)
+ 
+ 	octeon_user_io_init();
+ 	octeon_setup_smp();
++
++#ifdef CONFIG_CAVIUM_GDB
++	cvmx_debug_init ();
++#endif
+ }
+ 
+ #ifdef CONFIG_CAVIUM_OCTEON_LOCK_L2
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index bf08b15f0c06..16080c56ad61 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -468,6 +468,8 @@ int octeon_request_ipi_handler(octeon_message_fn_t fn);
+ void octeon_send_ipi_single(int cpu, unsigned int action);
+ void octeon_release_ipi_handler(int action);
+ 
++#define OCTEON_DEBUG_UART 1
++
+ int register_co_cache_error_notifier(struct notifier_block *nb);
+ int unregister_co_cache_error_notifier(struct notifier_block *nb);
+ #define CO_CACHE_ERROR_RECOVERABLE 0
+-- 
+2.25.1
+

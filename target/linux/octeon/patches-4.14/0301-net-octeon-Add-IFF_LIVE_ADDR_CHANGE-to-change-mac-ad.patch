@@ -1,0 +1,54 @@
+From 536c0a0e45f24d4050762cb2cea7f37e45f016e2 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Thu, 2 May 2019 12:39:35 +0200
+Subject: [PATCH 301/345] net: octeon: Add IFF_LIVE_ADDR_CHANGE to change mac
+ address live.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ drivers/net/ethernet/cavium/octeon/ethernet.c         | 1 +
+ drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c | 2 ++
+ drivers/net/ethernet/cavium/octeon/octeon_mgmt.c      | 2 +-
+ 3 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet.c b/drivers/net/ethernet/cavium/octeon/ethernet.c
+index 6279b928e059..bd707e9ec965 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet.c
+@@ -1018,6 +1018,7 @@ static int cvm_oct_probe(struct platform_device *pdev)
+ 			priv = netdev_priv(dev);
+ 			INIT_LIST_HEAD(&priv->srio_bcast);
+ 			priv->of_node = cvm_oct_node_for_port(pip, interface, interface_port);
++			dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
+ 			priv->netdev = dev;
+ 			priv->interface = interface;
+ 			priv->interface_port = interface_port;
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+index a0de8e56bcaf..b2d0160f558b 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+@@ -2884,6 +2884,8 @@ static int octeon3_eth_probe(struct platform_device *pdev)
+ 
+ 	if (pd->mac_type == BGX_MAC)
+ 		bgx_port_set_netdev(pdev->dev.parent, netdev);
++	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
++
+ 	priv = netdev_priv(netdev);
+ 	priv->netdev = netdev;
+ 	priv->mac_type = pd->mac_type;
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c b/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
+index 1b64be76b968..cba5e7c1b290 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
+@@ -1567,7 +1567,7 @@ static void octeon_mgmt_probe_common(struct net_device *netdev,
+ 	tasklet_init(&p->tx_clean_tasklet,
+ 		     octeon_mgmt_clean_tx_tasklet, (unsigned long)p);
+ 
+-	netdev->priv_flags |= IFF_UNICAST_FLT;
++	netdev->priv_flags |= IFF_UNICAST_FLT | IFF_LIVE_ADDR_CHANGE;
+ 
+ 	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(64);
+ 	pdev->dev.dma_mask = &pdev->dev.coherent_dma_mask;
+-- 
+2.25.1
+

@@ -1,0 +1,115 @@
+From 2cd41932d8e39ace1a6464877fa0085c36cf09ae Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Fri, 10 May 2019 14:37:14 +0200
+Subject: [PATCH 101/345] MIPS: OCTEON: Add OCTEON II build and configuration
+ option
+
+If building for OCTEON II only, we can select compiler options that
+give better code, but will not run on earlier chips.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/Makefile              | 15 ++++++++++++---
+ arch/mips/cavium-octeon/Kconfig | 23 ++++++++++++++++-------
+ arch/mips/include/asm/barrier.h | 13 ++++++++++++-
+ 3 files changed, 40 insertions(+), 11 deletions(-)
+
+diff --git a/arch/mips/Makefile b/arch/mips/Makefile
+index d42de71c23c5..925e5d6d3fa7 100644
+--- a/arch/mips/Makefile
++++ b/arch/mips/Makefile
+@@ -182,9 +182,18 @@ cflags-$(CONFIG_CPU_SB1)	+= $(call cc-option,-mno-mips3d)
+ cflags-$(CONFIG_CPU_R8000)	+= -march=r8000 -Wa,--trap
+ cflags-$(CONFIG_CPU_R10000)	+= $(call cc-option,-march=r10000,-march=r8000) \
+ 			-Wa,--trap
+-cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += $(call cc-option,-march=octeon) -Wa,--trap
+-ifeq (,$(findstring march=octeon, $(cflags-$(CONFIG_CPU_CAVIUM_OCTEON))))
+-cflags-$(CONFIG_CPU_CAVIUM_OCTEON) += -Wa,-march=octeon
++ifdef CONFIG_CPU_CAVIUM_OCTEON
++ifdef CONFIG_CAVIUM_OCTEON2
++cflags-y += $(call cc-option,-march=octeon2) -Wa,--trap
++ifeq (,$(findstring march=octeon2, $(cflags-y)))
++cflags-y += -Wa,-march=octeon2
++endif
++else
++cflags-y += $(call cc-option,-march=octeon) -Wa,--trap
++ifeq (,$(findstring march=octeon, $(cflags-y)))
++cflags-y += -Wa,-march=octeon
++endif
++endif
+ endif
+ cflags-$(CONFIG_CAVIUM_CN63XXP1) += -Wa,-mfix-cn63xxp1
+ cflags-$(CONFIG_CPU_BMIPS)	+= -march=mips32 -Wa,-mips32 -Wa,--trap
+diff --git a/arch/mips/cavium-octeon/Kconfig b/arch/mips/cavium-octeon/Kconfig
+index 3e4f79e42e90..56b8bab2661c 100644
+--- a/arch/mips/cavium-octeon/Kconfig
++++ b/arch/mips/cavium-octeon/Kconfig
+@@ -1,25 +1,34 @@
+ # SPDX-License-Identifier: GPL-2.0
+ if CPU_CAVIUM_OCTEON
+ 
++config CAVIUM_OCTEON2
++       bool "Build the kernel to be used only on OCTEON II processor cores"
++       select CAVIUM_CN63XXP1
++       default "n"
++       help
++	 This option enables the generation of Octeon2 specific
++	 instructions by the compiler, resulting in a kernel that is
++	 more efficient, but that will not run on Octeon and
++	 OcteonPlus processor cores.
++
+ config CAVIUM_CN63XXP1
+-	bool "Enable CN63XXP1 errata workarounds"
++	bool "Enable CN6XXX DCache prefetch errata workaround"
+ 	default "n"
+ 	help
+-	  The CN63XXP1 chip requires build time workarounds to
++	  The CN6XXX chips requires build time workarounds to
+ 	  function reliably, select this option to enable them.  These
+ 	  workarounds will cause a slight decrease in performance on
+-	  non-CN63XXP1 hardware, so it is recommended to select "n"
+-	  unless it is known the workarounds are needed.
++	  non-CN6XXX hardware.
+ 
+ config CAVIUM_OCTEON_CVMSEG_SIZE
+ 	int "Number of L1 cache lines reserved for CVMSEG memory"
+-	range 0 54
+-	default 1
++	range 2 54
++	default 2
+ 	help
+ 	  CVMSEG LM is a segment that accesses portions of the dcache as a
+ 	  local memory; the larger CVMSEG is, the smaller the cache is.
+ 	  This selects the size of CVMSEG LM, which is in cache blocks. The
+-	  legally range is from zero to 54 cache blocks (i.e. CVMSEG LM is
++	  legally range is from 2 to 54 cache blocks (i.e. CVMSEG LM is
+ 	  between zero and 6192 bytes).
+ 
+ endif # CPU_CAVIUM_OCTEON
+diff --git a/arch/mips/include/asm/barrier.h b/arch/mips/include/asm/barrier.h
+index a5eb1bb199a7..d5584a6145a2 100644
+--- a/arch/mips/include/asm/barrier.h
++++ b/arch/mips/include/asm/barrier.h
+@@ -132,7 +132,18 @@
+ 		: "m" (*(int *)CKSEG1)		\
+ 		: "memory")
+ #ifdef CONFIG_CPU_CAVIUM_OCTEON
+-# define OCTEON_SYNCW_STR	".set push\n.set arch=octeon\nsyncw\nsyncw\n.set pop\n"
++# ifdef CONFIG_CAVIUM_OCTEON2
++#  define OCTEON_SYNCW_STR     ".set push\n\t.set arch=octeon\n\tsyncw\n\t.set pop"
++# else
++/*
++ * We actually use two syncw instructions in a row when we need a
++ * write memory barrier. This is because the CN3XXX series of Octeons
++ * have errata Core-401.  This can cause a single syncw to not enforce
++ * ordering under very rare conditions. Even if it is rare, better
++ * safe than sorry.
++ */
++#  define OCTEON_SYNCW_STR     ".set push\n.set arch=octeon\nsyncw\nsyncw\n.set pop\n"
++# endif /* CONFIG_CAVIUM_OCTEON2 */
+ # define __syncw()	__asm__ __volatile__(OCTEON_SYNCW_STR : : : "memory")
+ 
+ # define fast_wmb()	__syncw()
+-- 
+2.25.1
+

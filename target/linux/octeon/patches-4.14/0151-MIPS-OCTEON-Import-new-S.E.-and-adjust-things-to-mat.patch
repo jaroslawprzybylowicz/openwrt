@@ -1,0 +1,79 @@
+From 940a7e73e01f178546ce20ca5205efd64f69af79 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Thu, 23 May 2019 15:11:28 +0200
+Subject: [PATCH 151/345] MIPS: OCTEON: Import new S.E. and adjust things to
+ match.
+
+This is as of r85184.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+Signed-off-by: Corey Minyard <cminyard@mvista.com>
+---
+ arch/mips/pci/pci-octeon.c                       | 6 ++----
+ arch/mips/pci/pcie-octeon.c                      | 2 +-
+ drivers/net/ethernet/cavium/octeon/octeon_mgmt.c | 8 ++++----
+ 3 files changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/arch/mips/pci/pci-octeon.c b/arch/mips/pci/pci-octeon.c
+index 848f06375c4a..2ac9dda3cecc 100644
+--- a/arch/mips/pci/pci-octeon.c
++++ b/arch/mips/pci/pci-octeon.c
+@@ -211,8 +211,7 @@ const char *octeon_get_pci_interrupts(void)
+ 	if (of_machine_is_compatible("dlink,dsr-500n"))
+ 		return "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+ 	switch (octeon_bootinfo->board_type) {
+-	case CVMX_BOARD_TYPE_NAO38:
+-		/* This is really the NAC38 */
++	case CVMX_BOARD_TYPE_NAC38:
+ 		return "AAAAADABAAAAAAAAAAAAAAAAAAAAAAAA";
+ 	case CVMX_BOARD_TYPE_EBH3100:
+ 	case CVMX_BOARD_TYPE_CN3010_EVB_HS5:
+@@ -586,8 +585,7 @@ static int __init octeon_pci_setup(void)
+ 
+ 	/* Only use the big bars on chips that support it */
+ 	if (OCTEON_IS_MODEL(OCTEON_CN31XX) ||
+-	    OCTEON_IS_MODEL(OCTEON_CN38XX_PASS2) ||
+-	    OCTEON_IS_MODEL(OCTEON_CN38XX_PASS1))
++	    OCTEON_IS_MODEL(OCTEON_CN38XX_PASS2))
+ 		octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_SMALL;
+ 	else
+ 		octeon_dma_bar_type = OCTEON_DMA_BAR_TYPE_BIG;
+diff --git a/arch/mips/pci/pcie-octeon.c b/arch/mips/pci/pcie-octeon.c
+index 5ff8be594101..1af1bae82db5 100644
+--- a/arch/mips/pci/pcie-octeon.c
++++ b/arch/mips/pci/pcie-octeon.c
+@@ -509,7 +509,7 @@ static void __cvmx_pcie_rc_initialize_config_space(int pcie_port)
+ 		cvmx_write_csr(CVMX_DPI_SLI_PRTX_CFG(pcie_port), prt_cfg.u64);
+ 
+ 		sli_s2m_portx_ctl.u64 = cvmx_read_csr(CVMX_PEXP_SLI_S2M_PORTX_CTL(pcie_port));
+-		sli_s2m_portx_ctl.s.mrrs = MRRS_CN6XXX;
++		sli_s2m_portx_ctl.cn63xx.mrrs = MRRS_CN6XXX;
+ 		cvmx_write_csr(CVMX_PEXP_SLI_S2M_PORTX_CTL(pcie_port), sli_s2m_portx_ctl.u64);
+ 	}
+ 
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c b/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
+index 45c51277e0cf..aed77b21134c 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
+@@ -1045,13 +1045,13 @@ static int octeon_mgmt_open(struct net_device *netdev)
+ 	}
+ 
+ 	oring1.u64 = 0;
+-	oring1.s.obase = p->tx_ring_handle >> 3;
+-	oring1.s.osize = OCTEON_MGMT_TX_RING_SIZE;
++	oring1.cn63xx.obase = p->tx_ring_handle >> 3;
++	oring1.cn63xx.osize = OCTEON_MGMT_TX_RING_SIZE;
+ 	cvmx_write_csr(p->mix + MIX_ORING1, oring1.u64);
+ 
+ 	iring1.u64 = 0;
+-	iring1.s.ibase = p->rx_ring_handle >> 3;
+-	iring1.s.isize = OCTEON_MGMT_RX_RING_SIZE;
++	iring1.cn63xx.ibase = p->rx_ring_handle >> 3;
++	iring1.cn63xx.isize = OCTEON_MGMT_RX_RING_SIZE;
+ 	cvmx_write_csr(p->mix + MIX_IRING1, iring1.u64);
+ 
+ 	memcpy(sa.sa_data, netdev->dev_addr, ETH_ALEN);
+-- 
+2.25.1
+

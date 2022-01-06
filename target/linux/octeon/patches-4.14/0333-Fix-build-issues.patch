@@ -1,0 +1,73 @@
+From ab73876b9d33ed32567263ebb92a0d6e68e9b773 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lukaszm@marvell.com>
+Date: Thu, 13 Jun 2019 13:03:34 +0200
+Subject: [PATCH 333/345] Fix build issues
+
+According to "net: ethtool: add new ETHTOOL_xLINKSETTINGS API" commit,
+ethtools_ops structure has changed and requires following changes.
+
+Change-Id: Id4c69f77f64bc7d8188078c19b3994d386a5f24b
+---
+ drivers/net/ethernet/cavium/octeon/ethernet-mdio.c   | 2 +-
+ drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c | 2 +-
+ drivers/net/ethernet/cavium/octeon/octeon-bgx.h      | 2 +-
+ drivers/net/ethernet/cavium/octeon/octeon_mgmt.c     | 4 ++--
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet-mdio.c b/drivers/net/ethernet/cavium/octeon/ethernet-mdio.c
+index cceb876c2a0e..b4cdf04a4b2b 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet-mdio.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet-mdio.c
+@@ -77,7 +77,7 @@ static int cvm_oct_get_settings(struct net_device *dev,
+ }
+ 
+ static int cvm_oct_set_settings(struct net_device *dev,
+-								struct ethtool_link_ksettings *cmd)
++								const struct ethtool_link_ksettings *cmd)
+ {
+ 	struct octeon_ethernet *priv = netdev_priv(dev);
+ 
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+index 978039381257..218870244d28 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+@@ -107,7 +107,7 @@ int bgx_port_ethtool_get_settings(struct net_device	*netdev,
+ EXPORT_SYMBOL(bgx_port_ethtool_get_settings);
+ 
+ int bgx_port_ethtool_set_settings(struct net_device	*netdev,
+-				  struct ethtool_link_ksettings	*cmd)
++				  const struct ethtool_link_ksettings	*cmd)
+ {
+ 	struct bgx_port_priv *p = bgx_port_netdev2priv(netdev);
+ 
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx.h b/drivers/net/ethernet/cavium/octeon/octeon-bgx.h
+index e886088147ec..daa3207d081d 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon-bgx.h
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx.h
+@@ -48,7 +48,7 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu);
+ int bgx_port_ethtool_get_settings(struct net_device *netdev,
+ 				  struct ethtool_link_ksettings *cmd);
+ int bgx_port_ethtool_set_settings(struct net_device *netdev,
+-				  struct ethtool_link_ksettings *cmd);
++				  const struct ethtool_link_ksettings *cmd);
+ int bgx_port_ethtool_nway_reset(struct net_device *netdev);
+ int bgx_port_do_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd);
+ 
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c b/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
+index cba5e7c1b290..3b88ae87839f 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon_mgmt.c
+@@ -1510,8 +1510,8 @@ static const struct net_device_ops octeon_mgmt_ops = {
+ 
+ static const struct ethtool_ops octeon_mgmt_o3_ethtool_ops = {
+ 	.get_drvinfo = octeon_mgmt_get_drvinfo,
+-	.get_settings = bgx_port_ethtool_get_settings,
+-	.set_settings = bgx_port_ethtool_set_settings,
++	.get_link_ksettings = bgx_port_ethtool_get_settings,
++	.set_link_ksettings = bgx_port_ethtool_set_settings,
+ 	.nway_reset = bgx_port_ethtool_nway_reset,
+ 	.get_link = ethtool_op_get_link,
+ };
+-- 
+2.25.1
+

@@ -1,0 +1,53 @@
+From 3a14e3f168042ff30a4dea59bf431b52b3ff5280 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Fri, 3 May 2019 12:50:10 +0200
+Subject: [PATCH 171/345] MIPS: move arch/mips/cavium-octeon/cpu.c to
+ arch/mips/kernel/
+
+... and rename it to octeon-cpu.c.
+
+Follow-on patches will be using this code for non-OCTEON-SoC systems
+that have OCTEON CPUs, so we need it in a common place.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/Makefile                       | 2 +-
+ arch/mips/kernel/Makefile                              | 2 +-
+ arch/mips/{cavium-octeon/cpu.c => kernel/octeon-cpu.c} | 0
+ 3 files changed, 2 insertions(+), 2 deletions(-)
+ rename arch/mips/{cavium-octeon/cpu.c => kernel/octeon-cpu.c} (100%)
+
+diff --git a/arch/mips/cavium-octeon/Makefile b/arch/mips/cavium-octeon/Makefile
+index dd7f841875e4..49a787073651 100644
+--- a/arch/mips/cavium-octeon/Makefile
++++ b/arch/mips/cavium-octeon/Makefile
+@@ -9,7 +9,7 @@
+ # Copyright (C) 2005-2009 Cavium Networks
+ #
+ 
+-obj-y := cpu.o setup.o serial.o octeon-platform.o octeon-irq.o csrc-octeon.o \
++obj-y := setup.o serial.o octeon-platform.o octeon-irq.o csrc-octeon.o \
+ 	 octeon-hw-status.o octeon_info.o
+ obj-y += dma-octeon.o
+ obj-y += csrc-octeon-ptp.o
+diff --git a/arch/mips/kernel/Makefile b/arch/mips/kernel/Makefile
+index c4e991a7bbca..beb951b039d1 100644
+--- a/arch/mips/kernel/Makefile
++++ b/arch/mips/kernel/Makefile
+@@ -39,7 +39,7 @@ obj-$(CONFIG_FUNCTION_TRACER)	+= mcount.o ftrace.o
+ sw-y				:= r4k_switch.o
+ sw-$(CONFIG_CPU_R3000)		:= r2300_switch.o
+ sw-$(CONFIG_CPU_TX39XX)		:= r2300_switch.o
+-sw-$(CONFIG_CPU_CAVIUM_OCTEON)	:= octeon_switch.o
++sw-$(CONFIG_CPU_CAVIUM_OCTEON)	:= octeon_switch.o octeon-cpu.o
+ obj-y				+= $(sw-y)
+ 
+ obj-$(CONFIG_CPU_R4K_FPU)	+= r4k_fpu.o
+diff --git a/arch/mips/cavium-octeon/cpu.c b/arch/mips/kernel/octeon-cpu.c
+similarity index 100%
+rename from arch/mips/cavium-octeon/cpu.c
+rename to arch/mips/kernel/octeon-cpu.c
+-- 
+2.25.1
+

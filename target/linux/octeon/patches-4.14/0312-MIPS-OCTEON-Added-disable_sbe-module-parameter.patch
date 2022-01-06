@@ -1,0 +1,60 @@
+From 47b7292eff91058f0eec7bfe9aebaabe15a97942 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Mon, 10 Jun 2019 15:19:50 +0200
+Subject: [PATCH 312/345] MIPS: OCTEON: Added disable_sbe module parameter
+
+To disable co-processor single bit errors from registering.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/octeon-error-tree.c | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/octeon-error-tree.c b/arch/mips/cavium-octeon/octeon-error-tree.c
+index 4271e054d94d..75b0924ae605 100644
+--- a/arch/mips/cavium-octeon/octeon-error-tree.c
++++ b/arch/mips/cavium-octeon/octeon-error-tree.c
+@@ -20,6 +20,10 @@
+ static int disable;
+ module_param(disable, int, S_IRUGO);
+ 
++/* Module parameter to disable co-processor SBE errors */
++static int disable_sbe;
++module_param(disable_sbe, int, S_IRUGO);
++
+ static int octeon_78xx_tree_size;
+ static struct cvmx_error_78xx *octeon_78xx_error_array;
+ 
+@@ -74,7 +78,12 @@ static void octeon_error_tree_add(struct octeon_hw_status_reg *sr,
+ 	sr[idx].mask_reg = n->mask_reg;
+ 
+ 	while (bit && bit->valid) {
+-		if (bit->group == group && (unit < 0 || unit == bit->unit)) {
++		/* Disable co-processor single bit errors */
++		if (disable_sbe
++		    && (group == CVMX_ERROR_GROUP_INTERNAL)
++		    && (bit->flags == CVMX_ERROR_TYPE_SBE))
++			break;
++		else if (bit->group == group && (unit < 0 || unit == bit->unit)) {
+ 			sr[idx].bit = bit->bit;
+ 			sr[idx].ack_w1c = bit->w1c;
+ 			sr[idx].has_child = 0;
+@@ -430,8 +439,14 @@ static int __init octeon_error_tree_init78(void)
+ 		for (i = 0; octeon_78xx_error_array[i].intsn < 0xfffff; i++) {
+ 			enum cvmx_error_groups group;
+ 			group = octeon_78xx_error_array[i].error_group;
+-			if (group == CVMX_ERROR_GROUP_INTERNAL)
++			if (group == CVMX_ERROR_GROUP_INTERNAL) {
++				/* Don't enable co-processor SBE errors */
++				if (disable_sbe
++				    && (octeon_78xx_error_array[i].flags ==
++					    CVMX_ERROR_TYPE_SBE))
++					continue;
+ 				octeon_ciu3_errbits_enable_intsn(node, octeon_78xx_error_array[i].intsn);
++			}
+ 		}
+ 
+ 	return 0;
+-- 
+2.25.1
+

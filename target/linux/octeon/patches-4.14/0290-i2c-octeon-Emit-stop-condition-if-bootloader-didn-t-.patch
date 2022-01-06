@@ -1,0 +1,50 @@
+From 9a67b13c3bc8fa9d0459c52e1cf4eaa6ed9325c2 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Mon, 13 May 2019 22:01:40 +0200
+Subject: [PATCH 290/345] i2c: octeon: Emit stop condition if bootloader didn't
+ end last transaction.
+
+In the case the bootloader didn't leave the hardware in a clean state,
+emit a STOP so that the driver starts with a known state.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/i2c/busses/i2c-octeon-core.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/i2c/busses/i2c-octeon-core.c b/drivers/i2c/busses/i2c-octeon-core.c
+index 2746e628d8a2..560256d4c18c 100644
+--- a/drivers/i2c/busses/i2c-octeon-core.c
++++ b/drivers/i2c/busses/i2c-octeon-core.c
+@@ -710,6 +710,8 @@ int octeon_i2c_init_lowlevel(struct octeon_i2c *i2c)
+ {
+ 	u8 status = 0;
+ 	int tries;
++	u8 ctrl = octeon_i2c_ctl_read(i2c);
++	u8 initial_status = octeon_i2c_stat_read(i2c);
+ 
+ 	/* reset controller */
+ 	octeon_i2c_reg_write(i2c, SW_TWSI_EOP_TWSI_RST, 0);
+@@ -727,6 +729,19 @@ int octeon_i2c_init_lowlevel(struct octeon_i2c *i2c)
+ 		return -EIO;
+ 	}
+ 
++	if (!(ctrl & TWSI_CTL_CE) && initial_status != STAT_IDLE) {
++		dev_err(i2c->dev,
++			"Error: initial status: %02x, forcing STOP to bus\n",
++			initial_status);
++		octeon_i2c_ctl_write(i2c, TWSI_CTL_ENAB);
++		octeon_i2c_write_int(i2c, 0);
++		udelay(5);
++		octeon_i2c_write_int(i2c, TWSI_INT_SDA_OVR | TWSI_INT_SCL_OVR);
++		udelay(5);
++		octeon_i2c_write_int(i2c, TWSI_INT_SDA_OVR);
++		udelay(5);
++		octeon_i2c_write_int(i2c, 0);
++	}
+ 	/* toggle twice to force both teardowns */
+ 	octeon_i2c_hlc_enable(i2c);
+ 	octeon_i2c_hlc_disable(i2c);
+-- 
+2.25.1
+

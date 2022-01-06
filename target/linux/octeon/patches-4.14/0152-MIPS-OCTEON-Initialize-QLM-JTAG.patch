@@ -1,0 +1,38 @@
+From 4eacbb757b99b5912f11837cccb15ec311eba7fd Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sat, 4 May 2019 14:34:22 +0200
+Subject: [PATCH 152/345] MIPS/OCTEON: Initialize QLM JTAG.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 35e667a57130..79000a374684 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -42,6 +42,7 @@
+ #include <asm/octeon/octeon.h>
+ #include <asm/octeon/pci-octeon.h>
+ #include <asm/octeon/cvmx-rst-defs.h>
++#include <asm/octeon/cvmx-qlm.h>
+ 
+ /*
+  * TRUE for devices having registers with little-endian byte
+@@ -1170,7 +1171,10 @@ void __init plat_mem_setup(void)
+ 
+ 	if (total == 0)
+ 		panic("Unable to allocate memory from "
+-		      "cvmx_bootmem_phy_alloc");
++		      "cvmx_bootmem_phy_alloc\n");
++
++	/* Initialize QLM and also apply any erratas */
++	cvmx_qlm_init();
+ }
+ 
+ /*
+-- 
+2.25.1
+

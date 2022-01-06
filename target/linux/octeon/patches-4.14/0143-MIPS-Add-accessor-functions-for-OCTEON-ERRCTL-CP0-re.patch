@@ -1,0 +1,28 @@
+From 8d108704dec3e127569b2ae7a872595d3e7598b5 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Tue, 7 May 2019 20:26:31 +0200
+Subject: [PATCH 143/345] MIPS: Add accessor functions for OCTEON ERRCTL CP0
+ register.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/include/asm/mipsregs.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/mips/include/asm/mipsregs.h b/arch/mips/include/asm/mipsregs.h
+index 306ed196065f..3d606b5375cb 100644
+--- a/arch/mips/include/asm/mipsregs.h
++++ b/arch/mips/include/asm/mipsregs.h
+@@ -1798,6 +1798,9 @@ do {									\
+ #define read_octeon_c0_dcacheerr()	__read_64bit_c0_register($27, 1)
+ #define write_octeon_c0_dcacheerr(val)	__write_64bit_c0_register($27, 1, val)
+ 
++#define read_octeon_c0_errctl()		__read_64bit_c0_register($26, 0)
++#define write_octeon_c0_errctl(val)	__write_64bit_c0_register($26, 0, val)
++
+ /* BMIPS3300 */
+ #define read_c0_brcm_config_0()		__read_32bit_c0_register($22, 0)
+ #define write_c0_brcm_config_0(val)	__write_32bit_c0_register($22, 0, val)
+-- 
+2.25.1
+

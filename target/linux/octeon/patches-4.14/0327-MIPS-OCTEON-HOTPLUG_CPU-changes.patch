@@ -1,0 +1,63 @@
+From 04e57f3711570bc6e2b0eb0a58da73392ad35242 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lma@semihalf.com>
+Date: Sat, 1 Jun 2019 12:13:19 +0200
+Subject: [PATCH 327/345] MIPS: OCTEON: HOTPLUG_CPU changes.
+
+Restore usage of hotplug state machine instead of old mechanism.
+---
+ arch/mips/cavium-octeon/smp.c | 37 +++--------------------------------
+ 1 file changed, 3 insertions(+), 34 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/smp.c b/arch/mips/cavium-octeon/smp.c
+index 5594c1cc6024..adc9dcd25304 100644
+--- a/arch/mips/cavium-octeon/smp.c
++++ b/arch/mips/cavium-octeon/smp.c
+@@ -413,42 +413,11 @@ static int octeon_up_prepare(unsigned int cpu)
+ 	return 0;
+ }
+ 
+-static int octeon_cpu_callback(struct notifier_block *nfb,
+-	unsigned long action, void *hcpu)
+-{
+-	unsigned int cpu = (unsigned long)hcpu;
+-	int ret = 0;
+-
+-	switch (action) {
+-	case CPU_UP_PREPARE_FROZEN:
+-	case CPU_UP_PREPARE:
+-		ret = octeon_up_prepare(cpu);
+-		if (ret)
+-			return notifier_from_errno(ret);
+-		break;
+-	case CPU_ONLINE_FROZEN:
+-	case CPU_ONLINE:
+-		pr_info("Cpu %d online\n", cpu);
+-		break;
+-	case CPU_DEAD_FROZEN:
+-	case CPU_DEAD:
+-		pr_info("Cpu %d offline\n", cpu);
+-		break;
+-	default:
+-		/* No action required for other events */
+-		break;
+-	}
+-
+-	return NOTIFY_OK;
+-}
+-
+-static struct notifier_block octeon_cpu_notifer = {
+-	.notifier_call = octeon_cpu_callback,
+-};
+-
+ static int register_cavium_notifier(void)
+ {
+-	return register_cpu_notifier(&octeon_cpu_notifer);
++	return cpuhp_setup_state_nocalls(CPUHP_MIPS_SOC_PREPARE,
++									"mips/cavium:prepare",
++									octeon_up_prepare, NULL);
+ }
+ 
+ early_initcall(register_cavium_notifier);
+-- 
+2.25.1
+

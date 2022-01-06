@@ -1,0 +1,82 @@
+From 532b2a19844445fa15463fff71fee53563cfa55f Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Fri, 17 May 2019 19:03:54 +0200
+Subject: [PATCH 289/345] MIPS/PCI/OCTEON: Map irqs after PCI bus rescan.
+
+Legacy interrupts will not work unless they are mapped on a rescan.
+
+Make the mapping functions, non-init, and map them all in
+pcibios_enable_device().
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/pci/pci-legacy.c  | 11 +++++++++++
+ arch/mips/pci/pci-octeon.c  |  3 +--
+ arch/mips/pci/pcie-octeon.c |  8 ++++----
+ 3 files changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/arch/mips/pci/pci-legacy.c b/arch/mips/pci/pci-legacy.c
+index 5314f89642d2..2e72660bae33 100644
+--- a/arch/mips/pci/pci-legacy.c
++++ b/arch/mips/pci/pci-legacy.c
+@@ -288,6 +288,17 @@ int pcibios_enable_device(struct pci_dev *dev, int mask)
+ 	if ((err = pcibios_enable_resources(dev, mask)) < 0)
+ 		return err;
+ 
++	struct pci_dev *_dev = NULL;
++	struct pci_host_bridge *hbrg = NULL;
++	for_each_pci_dev(_dev) {
++		hbrg = pci_find_host_bridge(_dev->bus);
++		hbrg->swizzle_irq = pci_common_swizzle;
++		hbrg->map_irq = pcibios_map_irq;
++		pci_assign_irq(_dev);
++		hbrg->swizzle_irq = NULL;
++		hbrg->map_irq = NULL;
++	}
++
+ 	return pcibios_plat_dev_init(dev);
+ }
+ 
+diff --git a/arch/mips/pci/pci-octeon.c b/arch/mips/pci/pci-octeon.c
+index 25c675faf657..63d6df306fdd 100644
+--- a/arch/mips/pci/pci-octeon.c
++++ b/arch/mips/pci/pci-octeon.c
+@@ -239,8 +239,7 @@ const char *octeon_get_pci_interrupts(void)
+  *		 as it goes through each bridge.
+  * Returns Interrupt number for the device
+  */
+-int __init octeon_pci_pcibios_map_irq(const struct pci_dev *dev,
+-				      u8 slot, u8 pin)
++int octeon_pci_pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
+ {
+ 	int irq_num;
+ 	const char *interrupts;
+diff --git a/arch/mips/pci/pcie-octeon.c b/arch/mips/pci/pcie-octeon.c
+index e1bf78e79617..3699e9efa76b 100644
+--- a/arch/mips/pci/pcie-octeon.c
++++ b/arch/mips/pci/pcie-octeon.c
+@@ -107,8 +107,8 @@ static irqreturn_t pcie_17400_handler(int irq, void *data)
+ 	return IRQ_HANDLED;
+ }
+ 
+-static int __init octeon_pcie78xx_pcibios_map_irq(const struct pci_dev *dev,
+-					      u8 slot, u8 pin)
++static int octeon_pcie78xx_pcibios_map_irq(const struct pci_dev *dev,
++					   u8 slot, u8 pin)
+ {
+ 	struct octeon_pcie_interface *pcie;
+ 	unsigned int intsn;
+@@ -209,8 +209,8 @@ EXPORT_SYMBOL(pcibus_to_node);
+  *		 as it goes through each bridge.
+  * Returns Interrupt number for the device
+  */
+-static int __init octeon_pcie_pcibios_map_irq(const struct pci_dev *dev,
+-					      u8 slot, u8 pin)
++static int octeon_pcie_pcibios_map_irq(const struct pci_dev *dev,
++				       u8 slot, u8 pin)
+ {
+ 	/*
+ 	 * The EBH5600 board with the PCI to PCIe bridge mistakenly
+-- 
+2.25.1
+

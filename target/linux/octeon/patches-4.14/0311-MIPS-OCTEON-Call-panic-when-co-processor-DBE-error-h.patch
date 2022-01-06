@@ -1,0 +1,27 @@
+From 2d479789ef716f363ec5b62d8ee7d2d876a643b9 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Thu, 6 Jun 2019 16:25:44 +0200
+Subject: [PATCH 311/345] MIPS: OCTEON: Call panic when co-processor DBE error
+ happens.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/octeon-error-tree.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/mips/cavium-octeon/octeon-error-tree.c b/arch/mips/cavium-octeon/octeon-error-tree.c
+index 9a073b2a5ecb..4271e054d94d 100644
+--- a/arch/mips/cavium-octeon/octeon-error-tree.c
++++ b/arch/mips/cavium-octeon/octeon-error-tree.c
+@@ -142,6 +142,8 @@ static bool octeon_error_tree_find_print(struct cvmx_error_muxchild *r, u64 reg,
+ 					pr_err("Error: %s\n", bit->desc);
+ 				else
+ 					pr_err("Error: Status bit %016lx:%u\n", (unsigned long)reg, reg_bit);
++				if (bit->flags == CVMX_ERROR_TYPE_DBE)
++					panic("Uncorrectable co-processor double bit error detected!\n");
+ 				return true;
+ 			}
+ 			bit++;
+-- 
+2.25.1
+

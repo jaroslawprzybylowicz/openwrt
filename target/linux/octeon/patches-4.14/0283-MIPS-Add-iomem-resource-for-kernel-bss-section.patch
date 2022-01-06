@@ -1,0 +1,50 @@
+From 419b39379663ef867b09e5057d248a854fe031e8 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Thu, 2 May 2019 13:49:02 +0200
+Subject: [PATCH 283/345] MIPS: Add iomem resource for kernel bss section.
+
+The kexec/kdump tools need to know where the .bss is so it can be
+included in the core dump.  This allows vmcore-dmesg to have access to
+the dmesg buffers of the crashed kernel as well as allowing the
+debugger to examine variables in the bss section.
+
+Add a request for the bss resource in addition to the already
+requested code and data sections.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/kernel/setup.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index 3c8114efbaf3..047a08e022b5 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -83,6 +83,7 @@ EXPORT_SYMBOL(mips_io_port_base);
+ 
+ static struct resource code_resource = { .name = "Kernel code", };
+ static struct resource data_resource = { .name = "Kernel data", };
++static struct resource bss_resource = { .name = "Kernel bss", };
+ 
+ static void *detect_magic __initdata = detect_memory_region;
+ 
+@@ -959,6 +960,8 @@ static void __init resource_init(void)
+ 	code_resource.end = __pa_symbol(&_etext) - 1;
+ 	data_resource.start = __pa_symbol(&_etext);
+ 	data_resource.end = __pa_symbol(&_edata) - 1;
++	bss_resource.start = __pa_symbol(&__bss_start);
++	bss_resource.end = __pa_symbol(&__bss_stop) - 1;
+ 
+ 	for (i = 0; i < boot_mem_map.nr_map; i++) {
+ 		struct resource *res;
+@@ -999,6 +1002,7 @@ static void __init resource_init(void)
+ 		 */
+ 		request_resource(res, &code_resource);
+ 		request_resource(res, &data_resource);
++		request_resource(res, &bss_resource);
+ 		request_crashkernel(res);
+ 	}
+ }
+-- 
+2.25.1
+

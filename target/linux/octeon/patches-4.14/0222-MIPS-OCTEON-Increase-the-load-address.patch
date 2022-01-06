@@ -1,0 +1,26 @@
+From 95ef741f54fbe4caa6b59e7fac2aee524a48a07e Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Sat, 11 May 2019 18:14:00 +0200
+Subject: [PATCH 222/345] MIPS:OCTEON: Increase the load address
+
+The size of BAR0 is increased on cn73xx from 32KB to 8MB.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/Platform | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/cavium-octeon/Platform b/arch/mips/cavium-octeon/Platform
+index 4c115fe0f9fb..5c9e3741b6ac 100644
+--- a/arch/mips/cavium-octeon/Platform
++++ b/arch/mips/cavium-octeon/Platform
+@@ -7,5 +7,5 @@ cflags-$(CONFIG_CAVIUM_OCTEON_SOC)	+=				\
+ ifdef CONFIG_MAPPED_KERNEL
+ load-$(CONFIG_CAVIUM_OCTEON_SOC)	+= 0xffffffffc0000000
+ else
+-load-$(CONFIG_CAVIUM_OCTEON_SOC)	+= 0xffffffff80100000
++load-$(CONFIG_CAVIUM_OCTEON_SOC)	+= 0xffffffff80800000
+ endif
+-- 
+2.25.1
+

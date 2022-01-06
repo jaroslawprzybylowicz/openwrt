@@ -1,0 +1,131 @@
+From 956049223a7c95f184905b88eee0e6238d36b0a8 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Sun, 26 May 2019 16:44:26 +0200
+Subject: [PATCH 254/345] mips/gpio: Fix OCTEON GPIO interrupt support.
+
+At some point registering the gpio interrupts before the gpio driver
+itself was initialized started causing the gpio platform device not to
+be registered.
+
+Fix it by initializing gpio interrupts from the gpio driver instead.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/cavium-octeon/octeon-irq.c | 10 ++++-----
+ drivers/gpio/gpio-octeon.c           | 33 +++++++++++++++++++++++++---
+ 2 files changed, 34 insertions(+), 9 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/octeon-irq.c b/arch/mips/cavium-octeon/octeon-irq.c
+index e49cca6202c1..557e645abb1e 100644
+--- a/arch/mips/cavium-octeon/octeon-irq.c
++++ b/arch/mips/cavium-octeon/octeon-irq.c
+@@ -1628,8 +1628,8 @@ static int __init octeon_irq_init_ciu(
+ 	return r;
+ }
+ 
+-static int __init octeon_irq_init_gpio(
+-	struct device_node *gpio_node, struct device_node *parent)
++int octeon_irq_init_gpio(struct device_node *gpio_node,
++			 struct device_node *parent)
+ {
+ 	struct octeon_irq_gpio_domain_data *gpiod;
+ 	u32 interrupt_cells;
+@@ -3266,8 +3266,8 @@ static irq_hw_number_t octeon_irq_ciu3_intsn2hw(struct irq_domain *d,
+ 	return intsn - gpiod->base_hwirq;
+ }
+ 
+-static int __init octeon_irq_init_gpio78(struct device_node *gpio_node,
+-					 struct device_node *parent)
++int octeon_irq_init_gpio78(struct device_node *gpio_node,
++			   struct device_node *parent)
+ {
+ 	struct octeon_irq_gpio_domain_data *gpiod;
+ 	unsigned int base_hwirq;
+@@ -3307,10 +3307,8 @@ static int __init octeon_irq_init_gpio78(struct device_node *gpio_node,
+ 
+ static struct of_device_id ciu_types[] __initdata = {
+ 	{.compatible = "cavium,octeon-3860-ciu", .data = octeon_irq_init_ciu},
+-	{.compatible = "cavium,octeon-3860-gpio", .data = octeon_irq_init_gpio},
+ 	{.compatible = "cavium,octeon-6880-ciu2", .data = octeon_irq_init_ciu2},
+ 	{.compatible = "cavium,octeon-7890-ciu3", .data = octeon_irq_init_ciu3},
+-	{.compatible = "cavium,octeon-7890-gpio", .data = octeon_irq_init_gpio78},
+ 	{.compatible = "cavium,octeon-7130-cib", .data = octeon_irq_init_cib},
+ 	{}
+ };
+diff --git a/drivers/gpio/gpio-octeon.c b/drivers/gpio/gpio-octeon.c
+index e123bdf98fa3..9d43fc8a316c 100644
+--- a/drivers/gpio/gpio-octeon.c
++++ b/drivers/gpio/gpio-octeon.c
+@@ -94,14 +94,31 @@ static int octeon_gpio_to_irq(struct gpio_chip *chip, unsigned offset)
+ 	return irq_create_of_mapping(&oirq);
+ }
+ 
++struct match_data {
++	unsigned int (*bit_cfg)(unsigned int gpio);
++	int (*irq_init_gpio)(struct device_node *n, struct device_node *p);
++};
++
++int octeon_irq_init_gpio(struct device_node *gpio_node, struct device_node *parent);
++int octeon_irq_init_gpio78(struct device_node *gpio_node, struct device_node *parent);
++
++static struct match_data md38 = {
++	.bit_cfg = bit_cfg_reg38,
++	.irq_init_gpio = octeon_irq_init_gpio
++};
++static struct match_data md78 = {
++	.bit_cfg = bit_cfg_reg78,
++	.irq_init_gpio = octeon_irq_init_gpio78
++};
++
+ static struct of_device_id octeon_gpio_match[] = {
+ 	{
+ 		.compatible = "cavium,octeon-3860-gpio",
+-		.data = bit_cfg_reg38,
++		.data = &md38,
+ 	},
+ 	{
+ 		.compatible = "cavium,octeon-7890-gpio",
+-		.data = bit_cfg_reg78,
++		.data = &md78,
+ 	},
+ 	{},
+ };
+@@ -114,17 +131,20 @@ static int octeon_gpio_probe(struct platform_device *pdev)
+ 	struct resource *res_mem;
+ 	void __iomem *reg_base;
+ 	const struct of_device_id *of_id;
++	struct device_node *irq_parent;
++	struct match_data *md;
+ 	int err = 0;
+ 
+ 	of_id = of_match_device(octeon_gpio_match, &pdev->dev);
+ 	if (!of_id)
+ 		return -EINVAL;
++	md = of_id->data;
+ 
+ 	gpio = devm_kzalloc(&pdev->dev, sizeof(*gpio), GFP_KERNEL);
+ 	if (!gpio)
+ 		return -ENOMEM;
+ 	chip = &gpio->chip;
+-	gpio->cfg_reg = of_id->data;
++	gpio->cfg_reg = md->bit_cfg;
+ 
+ 	res_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+ 	reg_base = devm_ioremap_resource(&pdev->dev, res_mem);
+@@ -133,6 +153,13 @@ static int octeon_gpio_probe(struct platform_device *pdev)
+ 
+ 	gpio->register_base = (u64)reg_base;
+ 	pdev->dev.platform_data = chip;
++
++	irq_parent = of_irq_find_parent(pdev->dev.of_node);
++	if (irq_parent) {
++		err = md->irq_init_gpio(pdev->dev.of_node, irq_parent);
++		if (err)
++			dev_err(&pdev->dev, "Error: irq init failed %d\n", err);
++	}
+ 	chip->label = "octeon-gpio";
+ 	chip->parent = &pdev->dev;
+ 	chip->of_node = pdev->dev.of_node;
+-- 
+2.25.1
+

@@ -1,0 +1,32 @@
+From 9dffd2a8425c33a9f496758e5fb30d18ca3691d4 Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Tue, 7 May 2019 14:18:11 +0200
+Subject: [PATCH 203/345] MIPS: Make XPHYSADDR() work for all addresses.
+
+Instead of changing the mask each time somebody designs a new CPU, set
+it to the widest value allowed by the architecture, which conveniently
+we already have a macro for.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/include/asm/addrspace.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/arch/mips/include/asm/addrspace.h b/arch/mips/include/asm/addrspace.h
+index 4856adc8906e..e856d3af6e55 100644
+--- a/arch/mips/include/asm/addrspace.h
++++ b/arch/mips/include/asm/addrspace.h
+@@ -51,8 +51,7 @@
+  * Returns the physical address of a CKSEGx / XKPHYS address
+  */
+ #define CPHYSADDR(a)		((_ACAST32_(a)) & 0x1fffffff)
+-#define XPHYSADDR(a)		((_ACAST64_(a)) &			\
+-				 _CONST64_(0x0000ffffffffffff))
++#define XPHYSADDR(a)		((_ACAST64_(a)) & TO_PHYS_MASK)
+ 
+ #ifdef CONFIG_64BIT
+ 
+-- 
+2.25.1
+

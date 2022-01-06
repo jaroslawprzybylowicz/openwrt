@@ -1,0 +1,57 @@
+From bf34404441559ce111640b56a09e410a3a3e356a Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Wed, 22 May 2019 17:45:00 +0200
+Subject: [PATCH 149/345] MIPS: Allow sub-architecture 'machines' to override
+ bootmem initialization.
+
+This is done be adding a asm/mach_??/mach_bootmem.h file.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+Signed-off-by: Carlos Munoz <cmunoz@caviumnetworks.com>
+---
+ arch/mips/include/asm/mach-generic/mach_bootmem.h | 1 +
+ arch/mips/kernel/setup.c                          | 9 ++++++++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+ create mode 100644 arch/mips/include/asm/mach-generic/mach_bootmem.h
+
+diff --git a/arch/mips/include/asm/mach-generic/mach_bootmem.h b/arch/mips/include/asm/mach-generic/mach_bootmem.h
+new file mode 100644
+index 000000000000..710cecca972d
+--- /dev/null
++++ b/arch/mips/include/asm/mach-generic/mach_bootmem.h
+@@ -0,0 +1 @@
++/* Empty */
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index bccce771ebb6..42a29e319459 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -41,6 +41,8 @@
+ #include <asm/smp-ops.h>
+ #include <asm/prom.h>
+ 
++#include <mach_bootmem.h>
++
+ #ifdef CONFIG_MIPS_ELF_APPENDED_DTB
+ const char __section(.appended_dtb) __appended_dtb[0x100000];
+ #endif /* CONFIG_MIPS_ELF_APPENDED_DTB */
+@@ -353,11 +355,16 @@ static unsigned long __init init_initrd(void)
+  * Initialize the bootmem allocator. It also setup initrd related data
+  * if needed.
+  */
+-#if defined(CONFIG_SGI_IP27) || (defined(CONFIG_CPU_LOONGSON3) && defined(CONFIG_NUMA))
++#if defined(CONFIG_SGI_IP27) || (defined(CONFIG_CPU_LOONGSON3) && defined(CONFIG_NUMA)) || \
++	(defined(CONFIG_CPU_CAVIUM_OCTEON) && defined(CONFIG_NUMA))
++#ifndef mach_bootmem_init
++static void mach_bootmem_init(void) {}
++#endif
+ 
+ static void __init bootmem_init(void)
+ {
+ 	init_initrd();
++	mach_bootmem_init();
+ 	finalize_initrd();
+ }
+ 
+-- 
+2.25.1
+

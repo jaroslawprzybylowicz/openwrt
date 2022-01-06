@@ -1,0 +1,26 @@
+From 8630a0c753ad48c24353cc62ce20d5bc4658cfad Mon Sep 17 00:00:00 2001
+From: David Daney <david.daney@cavium.com>
+Date: Thu, 9 May 2019 14:09:46 +0200
+Subject: [PATCH 295/345] rtc: isl12026: Select CONFIG_NVMEM to ensure it
+ builds.
+
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ drivers/rtc/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/rtc/Kconfig b/drivers/rtc/Kconfig
+index db90e52c75e0..d9a4c69bd0c1 100644
+--- a/drivers/rtc/Kconfig
++++ b/drivers/rtc/Kconfig
+@@ -409,6 +409,7 @@ config RTC_DRV_ISL12022
+ 
+ config RTC_DRV_ISL12026
+ 	tristate "Intersil ISL12026"
++	select NVMEM
+ 	help
+ 	  If you say yes here you get support for the
+ 	  Intersil ISL12026 RTC chip.
+-- 
+2.25.1
+

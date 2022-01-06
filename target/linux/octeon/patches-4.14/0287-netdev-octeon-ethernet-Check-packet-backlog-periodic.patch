@@ -1,0 +1,50 @@
+From f6441b9f9b816a6ed3474ef8e87b3b5ad7c4054d Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@cavium.com>
+Date: Tue, 7 May 2019 14:37:14 +0200
+Subject: [PATCH 287/345] netdev: octeon-ethernet: Check packet backlog
+ periodically to wake up other cpus if needed.
+
+Signed-off-by: Carlos Munoz <cmunoz@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/ethernet-napi.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet-napi.c b/drivers/net/ethernet/cavium/octeon/ethernet-napi.c
+index ee0974e860b7..e12930e618d3 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet-napi.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet-napi.c
+@@ -111,12 +111,13 @@ static int CVM_OCT_NAPI_POLL(struct napi_struct *napi, int budget)
+ 			 * around a little to see if another packet
+ 			 * comes in.
+ 			 */
+-			if (no_work_count >= 2)
++			if (no_work_count >= 20)
+ 				break;
+ 			no_work_count++;
+-			ndelay(500);
+ 			continue;
+ 		}
++		no_work_count = 0;
++
+ 		packet_ptr = work->packet_ptr;
+ 		pskb = cvm_oct_packet_to_skb(cvm_oct_get_buffer_ptr(packet_ptr));
+ 		prefetch(pskb);
+@@ -126,11 +127,10 @@ static int CVM_OCT_NAPI_POLL(struct napi_struct *napi, int budget)
+ 			did_work_request = true;
+ 		}
+ 
+-		if (unlikely(rx_count == 0)) {
+-			/* First time through, see if there is enough
+-			 * work waiting to merit waking another
+-			 * CPU.
+-			 */
++		/* Check every 8th packet if there is enough work waiting to
++		 * merit waking another CPU.
++		 */
++		if (unlikely((rx_count % 8) == 0)) {
+ 			int backlog;
+ 			int cores_in_use = core_state.active_cores;
+ 			if (CVM_OCT_NAPI_HAS_CN68XX_SSO) {
+-- 
+2.25.1
+

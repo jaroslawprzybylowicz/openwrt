@@ -1,0 +1,26 @@
+From b812984bd357d83bcda8d55bcf5a9f5d49828804 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Tue, 14 May 2019 14:38:36 +0200
+Subject: [PATCH 286/345] Set SDK_VERSION to 5.1.0.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index e3339904a7d9..2e6aa50df0ed 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -52,7 +52,7 @@
+ #include <asm/octeon/cvmx-qlm.h>
+ #include <asm/octeon/cvmx-debug.h>
+ 
+-#define SDK_VERSION "5.1.0-prerelease"
++#define SDK_VERSION "5.1.0"
+ 
+ /*
+  * TRUE for devices having registers with little-endian byte
+-- 
+2.25.1
+

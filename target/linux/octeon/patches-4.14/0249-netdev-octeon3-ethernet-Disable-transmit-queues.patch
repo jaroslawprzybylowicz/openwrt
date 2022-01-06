@@ -1,0 +1,27 @@
+From 80daaa60229d261f62de7cac3b1f0333ef8bf319 Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@caviumnetworks.com>
+Date: Mon, 6 May 2019 16:47:11 +0200
+Subject: [PATCH 249/345] netdev: octeon3-ethernet: Disable transmit queues.
+
+Signed-off-by: Carlos Munoz <cmunoz@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+index a3c12b70e363..952f422f7388 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+@@ -2475,6 +2475,9 @@ static int octeon3_eth_probe(struct platform_device *pdev)
+ 		return -ENOMEM;
+ 	}
+ 
++	/* Using transmit queues degrades performance significantly */
++	netdev->priv_flags |= IFF_NO_QUEUE;
++
+ 	SET_NETDEV_DEV(netdev, &pdev->dev);
+ 	dev_set_drvdata(&pdev->dev, netdev);
+ 
+-- 
+2.25.1
+

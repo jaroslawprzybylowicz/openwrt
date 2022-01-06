@@ -1,0 +1,27 @@
+From b9e2842605eeeae260ddfe04cafce5aee22645ea Mon Sep 17 00:00:00 2001
+From: Carlos Munoz <cmunoz@cavium.com>
+Date: Mon, 13 May 2019 17:31:32 +0200
+Subject: [PATCH 251/345] net: phy: Force the link state to be checked during
+ initialization.
+
+Signed-off-by: Carlos Munoz <cmunoz@cavium.com>
+---
+ drivers/net/phy/bcm87xx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/phy/bcm87xx.c b/drivers/net/phy/bcm87xx.c
+index f7ebdcff53e4..9c0358338d25 100644
+--- a/drivers/net/phy/bcm87xx.c
++++ b/drivers/net/phy/bcm87xx.c
+@@ -88,7 +88,7 @@ static int bcm87xx_config_init(struct phy_device *phydev)
+ {
+ 	phydev->supported = SUPPORTED_10000baseR_FEC;
+ 	phydev->advertising = ADVERTISED_10000baseR_FEC;
+-	phydev->state = PHY_NOLINK;
++	phydev->state = PHY_CHANGELINK;
+ 	phydev->autoneg = AUTONEG_DISABLE;
+ 
+ 	bcm87xx_of_reg_init(phydev);
+-- 
+2.25.1
+

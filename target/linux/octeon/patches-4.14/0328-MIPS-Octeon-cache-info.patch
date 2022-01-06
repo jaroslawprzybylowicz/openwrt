@@ -1,0 +1,121 @@
+From 3bd51e3e12eff4cb3210a4ee067b9d39e40a1d8d Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lma@semihalf.com>
+Date: Mon, 10 Jun 2019 21:20:47 +0200
+Subject: [PATCH 328/345] MIPS: Octeon: cache info
+
+Replace old CPU_HOTPLUG api calls with the new one.
+---
+ arch/mips/cavium-octeon/cacheinfo.c | 61 +++++------------------------
+ 1 file changed, 9 insertions(+), 52 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/cacheinfo.c b/arch/mips/cavium-octeon/cacheinfo.c
+index b27d653f4d0a..52a9be5086f2 100644
+--- a/arch/mips/cavium-octeon/cacheinfo.c
++++ b/arch/mips/cavium-octeon/cacheinfo.c
+@@ -686,14 +686,14 @@ static void cacheinfo_sysfs_populate(unsigned int cpu_id,
+ 	}
+ }
+ 
+-void cacheinfo_cpu_online(unsigned int cpu_id)
++int cacheinfo_cpu_online(unsigned int cpu_id)
+ {
+ 	struct cache *cache;
+ 	struct cache *iter;
+ 
+ 	cache = cache_chain_instantiate(cpu_id);
+ 	if (!cache)
+-		return;
++		return 0;
+ 
+ 	/* Add all CPUs to the L2 cache for now */
+ 	list_for_each_entry(iter, &cache_list, list) {
+@@ -703,7 +703,7 @@ void cacheinfo_cpu_online(unsigned int cpu_id)
+ 
+ 	cacheinfo_sysfs_populate(cpu_id, cache);
+ 
+-
++	return 0;
+ }
+ 
+ static void remove_index_dirs(struct cache_dir *cache_dir)
+@@ -758,7 +758,7 @@ static void cache_cpu_clear(struct cache *cache, int cpu)
+ 	}
+ }
+ 
+-void cacheinfo_cpu_offline(unsigned int cpu_id)
++int cacheinfo_cpu_offline(unsigned int cpu_id)
+ {
+ 	struct cache_dir *cache_dir;
+ 	struct cache *cache;
+@@ -782,63 +782,20 @@ void cacheinfo_cpu_offline(unsigned int cpu_id)
+ 	cache = cache_lookup_by_cpuid(cpu_id);
+ 	if (cache)
+ 		cache_cpu_clear(cache, cpu_id);
+-}
+-
+-
+-
+-
+-static void register_cpu_online(unsigned int cpu_id)
+-{
+-	cacheinfo_cpu_online(cpu_id);
+-}
+-
+-static void unregister_cpu_online(unsigned int cpu_id)
+-{
+-	cacheinfo_cpu_offline(cpu_id);
+-}
+ 
+-static int sysfs_cpu_notify(struct notifier_block *self,
+-			    unsigned long action, void *hcpu)
+-{
+-	unsigned int cpu = (unsigned int)(long)hcpu;
+-
+-	switch (action) {
+-	case CPU_ONLINE:
+-	case CPU_ONLINE_FROZEN:
+-		register_cpu_online(cpu);
+-		break;
+-
+-	case CPU_DEAD:
+-	case CPU_DEAD_FROZEN:
+-		unregister_cpu_online(cpu);
+-		break;
+-	}
+-	return NOTIFY_OK;
++	return 0;
+ }
+ 
+-static struct notifier_block sysfs_cpu_nb = {
+-	.notifier_call = sysfs_cpu_notify,
+-};
+-
+ static int __init octeon_cacheinfo_init(void)
+ {
+-	int cpu;
+-
+-	for_each_online_cpu(cpu) {
+-		cacheinfo_cpu_online(cpu);
+-	}
+-	register_hotcpu_notifier(&sysfs_cpu_nb);
+-	return 0;
++	return cpuhp_setup_state(CPUHP_ONLINE,
++					 "mips/cavium:cacheinfo",
++					 cacheinfo_cpu_online, cacheinfo_cpu_offline);
+ }
+ 
+ static void __init octeon_cacheinfo_cleanup(void)
+ {
+-	int cpu;
+-
+-	for_each_online_cpu(cpu) {
+-		cacheinfo_cpu_offline(cpu);
+-	}
+-	unregister_hotcpu_notifier(&sysfs_cpu_nb);
++	cpuhp_remove_state(CPUHP_ONLINE);
+ }
+ 
+ module_init(octeon_cacheinfo_init);
+-- 
+2.25.1
+

@@ -1,0 +1,34 @@
+From 656f404f1bf43bc5ff977ca42510b673abe30967 Mon Sep 17 00:00:00 2001
+From: Peter Swain <peter.swain@cavium.com>
+Date: Sun, 2 Jun 2019 14:18:05 +0200
+Subject: [PATCH 322/345] net: octeon: NAPI waits once for next packet
+
+A NAPI performance tweak (re-zeroing no_work_count on every packet)
+was introduced in commit a4d77ec5c5d38e02fffbc85df45df447596a2570
+    "netdev: octeon-ethernet: Check packet backlog periodically ..."
+but pathological packet arrival rate can cause livelock and crash.
+
+The short poll at end of a run of successful wqe retrievals is now
+only done exactly once. That retains the performance improvement of
+the earlier code, but avoids the vulnerability.
+
+Signed-off-by: Peter Swain <peter.swain@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/ethernet-napi.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet-napi.c b/drivers/net/ethernet/cavium/octeon/ethernet-napi.c
+index d9fd576a8fb0..6ac6213790b8 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet-napi.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet-napi.c
+@@ -116,7 +116,6 @@ static int CVM_OCT_NAPI_POLL(struct napi_struct *napi, int budget)
+ 			no_work_count++;
+ 			continue;
+ 		}
+-		no_work_count = 0;
+ 
+ 		packet_ptr = work->packet_ptr;
+ 		pskb = cvm_oct_packet_to_skb(cvm_oct_get_buffer_ptr(packet_ptr));
+-- 
+2.25.1
+

@@ -1,0 +1,26 @@
+From 18645d90535ed037823724d9c8ea62f1a1601909 Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Wed, 5 Jun 2019 18:31:48 +0200
+Subject: [PATCH 321/345] MIPS:OCTEON: Sync-up SE files (r172329)
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/executive/cvmx-pcie.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/cavium-octeon/executive/cvmx-pcie.c b/arch/mips/cavium-octeon/executive/cvmx-pcie.c
+index 4fba56541516..0360c50de3fb 100644
+--- a/arch/mips/cavium-octeon/executive/cvmx-pcie.c
++++ b/arch/mips/cavium-octeon/executive/cvmx-pcie.c
+@@ -1695,7 +1695,7 @@ static void __cvmx_pcie_sli_config(int node, int pcie_port)
+ 	   after setting up the link before continuing. PCIe says the devices
+ 	   may need up to 900ms to come up. 700ms plus 200ms from above gives 
+ 	   us a total of 900ms */
+-	if (OCTEON_IS_OCTEON2() && OCTEON_IS_MODEL(OCTEON_CN70XX))
++	if (OCTEON_IS_OCTEON2() || OCTEON_IS_MODEL(OCTEON_CN70XX))
+ 		cvmx_wait_usec(PCIE_DEVICE_READY_WAIT_DELAY_MICROSECONDS);
+ }
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,38 @@
+From 0575afb4aa228148234a0b35d3b89ed27d66c6f5 Mon Sep 17 00:00:00 2001
+From: "Steven J. Hill" <Steven.Hill@cavium.com>
+Date: Tue, 14 May 2019 14:27:34 +0200
+Subject: [PATCH 264/345] MIPS: OCTEON: Platform support for OCTEON III USB
+ controller
+
+Add all the necessary platform code to initialize the dwc3
+USB host controller. This code initializes the clocks and
+performs a reset on the USB core and PHYs. The driver code
+in 'drivers/usb/dwc3' is where the real driver lives.
+
+Signed-off-by: Steven J. Hill <steven.hill@cavium.com>
+Acked-by: David Daney <david.daney@cavium.com>
+Cc: Ralf Baechle <ralf@linux-mips.org>
+Cc: linux-mips@linux-mips.org
+Patchwork: https://patchwork.linux-mips.org/patch/15108/
+Signed-off-by: James Hogan <james.hogan@imgtec.com>
+(cherry picked from commit 93e502b3c2d44dcb964141cbf82930282de8e40b)
+Signed-off-by: David Daney <david.daney@cavium.com>
+---
+ arch/mips/cavium-octeon/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/mips/cavium-octeon/Makefile b/arch/mips/cavium-octeon/Makefile
+index b4452be04fcc..682490fc9bac 100644
+--- a/arch/mips/cavium-octeon/Makefile
++++ b/arch/mips/cavium-octeon/Makefile
+@@ -32,6 +32,7 @@ obj-$(CONFIG_CAVIUM_OCTEON_ERROR_TREE)	+= octeon-error-tree.o octeon-78xx-errors
+ 	octeon-73xx-errors.o octeon-7xxx-errors.o octeon-75xx-errors.o
+ obj-$(CONFIG_SYSFS)                     += cacheinfo.o
+ obj-$(CONFIG_OCTEON_FPA3)		+= octeon-fpa3.o
++obj-$(CONFIG_USB)		      += octeon-usb.o
+ 
+ ifdef CONFIG_SMP
+ ifdef CONFIG_SYSFS
+-- 
+2.25.1
+

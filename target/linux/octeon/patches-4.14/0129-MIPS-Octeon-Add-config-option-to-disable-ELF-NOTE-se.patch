@@ -1,0 +1,52 @@
+From f7aefbb3c93a7a80c41a01eabc439fa03fcf80f5 Mon Sep 17 00:00:00 2001
+From: David Daney <ddaney@caviumnetworks.com>
+Date: Fri, 24 May 2019 17:45:25 +0200
+Subject: [PATCH 129/345] MIPS: Octeon: Add config option to disable ELF NOTE
+ segments
+
+Pre-SDK-1.8.1 bootloaders can not handel PT_NOTE program headers, so
+we by default will not emit them.
+
+Bug #2461
+
+Signed-off-by: David Daney <ddaney@caviumnetworks.com>
+Signed-off-by: Leonid Rosenboim <lrosenboim@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <carlos.munoz@caviumnetworks.com>
+---
+ arch/mips/kernel/vmlinux.lds.S | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/arch/mips/kernel/vmlinux.lds.S b/arch/mips/kernel/vmlinux.lds.S
+index cb7e9ed7a453..53eee12ce3c0 100644
+--- a/arch/mips/kernel/vmlinux.lds.S
++++ b/arch/mips/kernel/vmlinux.lds.S
+@@ -18,9 +18,9 @@ OUTPUT_ARCH(mips)
+ ENTRY(kernel_entry)
+ PHDRS {
+ 	text PT_LOAD FLAGS(7);	/* RWX */
+-#ifndef CONFIG_CAVIUM_OCTEON_SOC
++#ifndef CONFIG_DISABLE_ELF_NOTE_HEADER
+ 	note PT_NOTE FLAGS(4);	/* R__ */
+-#endif /* CAVIUM_OCTEON_SOC */
++#endif /* CONFIG_DISABLE_ELF_NOTE_HEADER */
+ }
+ 
+ #ifdef CONFIG_32BIT
+@@ -76,11 +76,11 @@ SECTIONS
+ 		__stop___dbe_table = .;
+ 	}
+ 
+-#ifdef CONFIG_CAVIUM_OCTEON_SOC
++#ifdef CONFIG_DISABLE_ELF_NOTE_HEADER
+ #define NOTES_HEADER
+-#else /* CONFIG_CAVIUM_OCTEON_SOC */
++#else /* CONFIG_DISABLE_ELF_NOTE_HEADER */
+ #define NOTES_HEADER :note
+-#endif /* CONFIG_CAVIUM_OCTEON_SOC */
++#endif /* CONFIG_DISABLE_ELF_NOTE_HEADER */
+ 	NOTES :text NOTES_HEADER
+ 	.dummy : { *(.dummy) } :text
+ 
+-- 
+2.25.1
+

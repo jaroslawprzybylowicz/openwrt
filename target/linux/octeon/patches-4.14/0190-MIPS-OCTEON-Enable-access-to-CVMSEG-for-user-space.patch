@@ -1,0 +1,63 @@
+From 1d7d643e82591002bb701190e5b440b2a0b59c7e Mon Sep 17 00:00:00 2001
+From: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Date: Thu, 9 May 2019 17:07:01 +0200
+Subject: [PATCH 190/345] MIPS:OCTEON: Enable access to CVMSEG for user space
+
+Access to CVMSEG is required for LMTDMA operations.
+Also enable CvmMemCtl(LMTLIME,LMTENA), required for LMTDMA opernations.
+
+Signed-off-by: Chandrakala Chavva <cchavva@caviumnetworks.com>
+Signed-off-by: Carlos Munoz <carlos.munoz@caviumnetworks.com>
+---
+ arch/mips/cavium-octeon/setup.c       | 6 ++++++
+ arch/mips/include/asm/octeon/octeon.h | 3 +++
+ arch/mips/kernel/octeon-cpu.c         | 1 +
+ 3 files changed, 10 insertions(+)
+
+diff --git a/arch/mips/cavium-octeon/setup.c b/arch/mips/cavium-octeon/setup.c
+index 46f7375d9301..7898d2f59aa1 100644
+--- a/arch/mips/cavium-octeon/setup.c
++++ b/arch/mips/cavium-octeon/setup.c
+@@ -532,6 +532,12 @@ void octeon_user_io_init(void)
+ 	 * kernel/debug mode. */
+ #if CONFIG_CAVIUM_OCTEON_CVMSEG_SIZE > 0
+ 	cvmmemctl.s.cvmsegenak = 1;
++	if (OCTEON_IS_MODEL(OCTEON_CN78XX)) {
++		/* Enable LMTDMA */
++		cvmmemctl.s.lmtena = 1;
++		/* Scratch line to use for LMT operation */
++		cvmmemctl.s.lmtline = 2;
++	}
+ #else
+ 	cvmmemctl.s.cvmsegenak = 0;
+ #endif
+diff --git a/arch/mips/include/asm/octeon/octeon.h b/arch/mips/include/asm/octeon/octeon.h
+index b56512e49bee..01c30ee2bddd 100644
+--- a/arch/mips/include/asm/octeon/octeon.h
++++ b/arch/mips/include/asm/octeon/octeon.h
+@@ -189,7 +189,10 @@ union octeon_cvmemctl {
+ 		__BITFIELD_FIELD(uint64_t wbfltime2:1,
+ 		__BITFIELD_FIELD(uint64_t wbthresh2:1,
+ 		__BITFIELD_FIELD(uint64_t cvmsegiodis:1,
++		/* When set, LMTDMA/LMTST operations are permitted */
+ 		__BITFIELD_FIELD(uint64_t lmtena:1,
++		/* Selects the CVMSEG LM cacheline used by LMTDMA
++		   LMTST and wide atomic store operations */
+ 		__BITFIELD_FIELD(uint64_t lmtline:6,
+ 		/* When set, TLB parity errors can occur. */
+ 		__BITFIELD_FIELD(uint64_t tlbperrena:1,
+diff --git a/arch/mips/kernel/octeon-cpu.c b/arch/mips/kernel/octeon-cpu.c
+index c601fdbc94f0..efe20723d8fd 100644
+--- a/arch/mips/kernel/octeon-cpu.c
++++ b/arch/mips/kernel/octeon-cpu.c
+@@ -50,6 +50,7 @@ void octeon_prepare_arch_switch(struct task_struct *next)
+ 
+ #if defined(CONFIG_CAVIUM_OCTEON_USER_IO_PER_PROCESS)
+ 	cvmmemctl.s.xkioenau = test_tsk_thread_flag(group_leader, TIF_XKPHYS_IO_EN) ? 1 : 0;
++	cvmmemctl.s.cvmsegenau = test_tsk_thread_flag(group_leader, TIF_XKPHYS_IO_EN) ? 1 : 0;
+ #endif
+ 	write_c0_cvmmemctl(cvmmemctl.u64);
+ }
+-- 
+2.25.1
+

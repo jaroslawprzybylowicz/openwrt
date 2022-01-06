@@ -1,0 +1,37 @@
+From c1156a0801f657749a42f4bdfbb1cd1d36c71a45 Mon Sep 17 00:00:00 2001
+From: Abhijit Ayarekar <abhijit.ayarekar@caviumnetworks.com>
+Date: Fri, 3 May 2019 17:54:29 +0200
+Subject: [PATCH 302/345] octeon3: ethernet: driver: Added vlan header size to
+ max mtu.
+
+This is required to support vlan.
+
+Signed-off-by: Abhijit Ayarekar <abhijit.ayarekar@cavium.com>
+---
+ drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+index 730077c80dba..978039381257 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon-bgx-port.c
+@@ -34,6 +34,7 @@
+ #include <linux/module.h>
+ #include <linux/slab.h>
+ #include <linux/list.h>
++#include <linux/if_vlan.h>
+ 
+ #include <asm/octeon/cvmx-helper.h>
+ #include <asm/octeon/cvmx-helper-util.h>
+@@ -443,7 +444,7 @@ int bgx_port_change_mtu(struct net_device *netdev, int new_mtu)
+ 
+ 	netdev->mtu = new_mtu;
+ 
+-	max_frame = round_up(new_mtu + ETH_HLEN + ETH_FCS_LEN, 8);
++	max_frame = round_up(new_mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN, 8);
+ 
+ 	cfg.u64 = cvmx_read_csr_node(priv->numa_node, CVMX_BGXX_CMRX_CONFIG(priv->index, priv->bgx_interface));
+ 	if (cfg.s.lmac_type == 0 || cfg.s.lmac_type == 5)
+-- 
+2.25.1
+

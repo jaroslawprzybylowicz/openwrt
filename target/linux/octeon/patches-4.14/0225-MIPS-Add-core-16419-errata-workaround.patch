@@ -1,0 +1,38 @@
+From 47163508f8fae2d2d9e7e589b15fd556987a8a5e Mon Sep 17 00:00:00 2001
+From: Andrew Pinski <apinski@cavium.com>
+Date: Wed, 15 May 2019 14:09:51 +0200
+Subject: [PATCH 225/345] MIPS: Add core-16419 errata workaround
+
+There needs to be at least 8 cycles between a branch that can
+be mispredicted and the eret.
+
+Signed-off-by: Andrew Pinski <apinski@cavium.com>
+---
+ arch/mips/kernel/genex.S | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/mips/kernel/genex.S b/arch/mips/kernel/genex.S
+index 38f2db07df73..0b8f216abbb8 100644
+--- a/arch/mips/kernel/genex.S
++++ b/arch/mips/kernel/genex.S
+@@ -177,6 +177,17 @@ NESTED(handle_int, PT_SIZE, sp)
+ 	and	k0, ST0_IE
+ 	bnez	k0, 1f
+ 
++	/* Octeon core-16419 errata. */
++	nop
++	nop
++	nop
++	nop
++	nop
++	nop
++	nop
++	nop
++	nop
++
+ #ifdef CONFIG_FAST_ACCESS_TO_THREAD_POINTER
+ 	LONG_L	k0, FAST_ACCESS_THREAD_OFFSET($0)
+ #endif
+-- 
+2.25.1
+

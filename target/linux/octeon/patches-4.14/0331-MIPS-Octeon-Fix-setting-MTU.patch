@@ -1,0 +1,43 @@
+From c579c3ef5c3f83043616d4c927f27b15f77c6512 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lma@semihalf.com>
+Date: Sun, 9 Jun 2019 19:34:37 +0200
+Subject: [PATCH 331/345] MIPS: Octeon: Fix setting MTU
+
+Set max_mtu for the correct value for BGX.
+---
+ drivers/net/ethernet/cavium/octeon/ethernet.c         | 3 +++
+ drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c | 4 ++++
+ 2 files changed, 7 insertions(+)
+
+diff --git a/drivers/net/ethernet/cavium/octeon/ethernet.c b/drivers/net/ethernet/cavium/octeon/ethernet.c
+index bd707e9ec965..2b99beb7ec34 100644
+--- a/drivers/net/ethernet/cavium/octeon/ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/ethernet.c
+@@ -1019,6 +1019,9 @@ static int cvm_oct_probe(struct platform_device *pdev)
+ 			INIT_LIST_HEAD(&priv->srio_bcast);
+ 			priv->of_node = cvm_oct_node_for_port(pip, interface, interface_port);
+ 			dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
++			/* MTU range: 64 - 65392 */
++			dev->min_mtu = 64;
++			dev->max_mtu = 65392;
+ 			priv->netdev = dev;
+ 			priv->interface = interface;
+ 			priv->interface_port = interface_port;
+diff --git a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+index 8013f7084506..259fc2a57642 100644
+--- a/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
++++ b/drivers/net/ethernet/cavium/octeon/octeon3-ethernet.c
+@@ -2881,6 +2881,10 @@ static int octeon3_eth_probe(struct platform_device *pdev)
+ 		bgx_port_set_netdev(pdev->dev.parent, netdev);
+ 	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
+ 
++	/* MTU range: 64 - 65392 */
++	netdev->min_mtu = 64;
++	netdev->max_mtu = 65392;
++
+ 	priv = netdev_priv(netdev);
+ 	priv->netdev = netdev;
+ 	priv->mac_type = pd->mac_type;
+-- 
+2.25.1
+

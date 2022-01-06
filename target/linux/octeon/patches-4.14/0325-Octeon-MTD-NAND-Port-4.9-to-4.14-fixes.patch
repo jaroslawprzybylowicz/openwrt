@@ -1,0 +1,60 @@
+From 55c138640722e2d6f984061beeef1d99b01346c0 Mon Sep 17 00:00:00 2001
+From: Lukasz Majczak <lma@semihalf.com>
+Date: Thu, 6 Jun 2019 13:17:35 +0200
+Subject: [PATCH 325/345] Octeon: MTD: NAND: Port 4.9 to 4.14 fixes
+
+---
+ arch/mips/cavium-octeon/octeon-nand.c | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/arch/mips/cavium-octeon/octeon-nand.c b/arch/mips/cavium-octeon/octeon-nand.c
+index 57285cba08f9..2c13c5b42b3f 100644
+--- a/arch/mips/cavium-octeon/octeon-nand.c
++++ b/arch/mips/cavium-octeon/octeon-nand.c
+@@ -21,14 +21,13 @@
+ #include <linux/semaphore.h>
+ #include <linux/platform_device.h>
+ #include <linux/mtd/mtd.h>
+-#include <linux/mtd/nand.h>
++#include <linux/mtd/rawnand.h>
+ #include <linux/mtd/nand_ecc.h>
+ #include <linux/mtd/nand_bch.h>
+ #include <linux/mtd/partitions.h>
+ #include <linux/of.h>
+ #include <linux/slab.h>
+ #include <linux/mm.h>
+-#include <net/irda/parameters.h>
+ 
+ 
+ #define DRIVER_NAME "octeon-nand"
+@@ -235,13 +234,15 @@ static int octeon_nand_verify_buf(struct mtd_info *mtd, const uint8_t *buf,
+  *
+  * @param	mtd	MTD controller interface
+  * @param[in]	conf	Timing configuration
+- * @param	check_only	Always return true for now when checking
++ * @param	chipnr	If chipnr is set to %NAND_DATA_IFACE_CHECK_ONLY this
++ *			  means the configuration should not be applied but
++ *			  only checked.
+  *
+  * @return	0 for success
+  */
+ static int octeon_nand_setup_data_interface(struct mtd_info *mtd,
+-					    const struct nand_data_interface *conf,
+-					    bool check_only)
++						int chipnr,
++					    const struct nand_data_interface *conf)
+ {
+ 	const struct nand_sdr_timings *sdr;
+ 	struct octeon_nand *priv = mtd->priv;
+@@ -250,7 +251,7 @@ static int octeon_nand_setup_data_interface(struct mtd_info *mtd,
+ 	if (conf->type != NAND_SDR_IFACE)
+ 		return -EINVAL;
+ 
+-	if (check_only)
++	if (chipnr == NAND_DATA_IFACE_CHECK_ONLY)
+ 		return 0;
+ 
+ 	sdr = &conf->timings.sdr;
+-- 
+2.25.1
+
