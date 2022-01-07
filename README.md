@@ -1,87 +1,17 @@
-![OpenWrt logo](include/logo.png)
+Unifi Security Gateway is not straightforward supported by OpenWRT at this point. This repository adds some patches and hacks to make it work.
 
-OpenWrt Project is a Linux operating system targeting embedded devices. Instead
-of trying to create a single, static firmware, OpenWrt provides a fully
-writable filesystem with package management. This frees you from the
-application selection and configuration provided by the vendor and allows you
-to customize the device through the use of packages to suit any application.
-For developers, OpenWrt is the framework to build an application without having
-to build a complete firmware around it; for users this means the ability for
-full customization, to use the device in ways never envisioned.
+It basically solves three problems:
+- Octeon SoC ethernet driver in the 5.x is unstable and cause panics / dropped packets.
+- There is no device tree definition for USG board in the upstream kernel.
+- Upstream driver is not very performant compared to [Marvell (new Octeon owner after Cavium acquisition) version of the kernel](https://github.com/MarvellEmbeddedProcessors/Octeon-Linux-kernel-4.14).
 
-Sunshine!
+This repository is essentially providing patches to revert openwrt to 4.14.76 kernel, apply Marvell/Cavium kernel patches and put USG board support on top of it.
+Cavium ip forward offload kernel module is enabled in the build, but not utilized. 
 
-## Development
+Still, performance is quite good. This version is capable of reaching ~900mbit/s rate with simple NAT (compared to 250mbit/s on upstream kernel). 
 
-To build your own firmware you need a GNU/Linux, BSD or MacOSX system (case
-sensitive filesystem required). Cygwin is unsupported because of the lack of a
-case sensitive file system.
-
-### Requirements
-
-You need the following tools to compile OpenWrt, the package names vary between
-distributions. A complete list with distribution specific packages is found in
-the [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
-documentation.
-
-```
-gcc binutils bzip2 flex python3 perl make find grep diff unzip gawk getopt
-subversion libz-dev libc-dev rsync which
-```
-
-### Quickstart
-
-1. Run `./scripts/feeds update -a` to obtain all the latest package definitions
-   defined in feeds.conf / feeds.conf.default
-
-2. Run `./scripts/feeds install -a` to install symlinks for all obtained
-   packages into package/feeds/
-
-3. Run `make menuconfig` to select your preferred configuration for the
-   toolchain, target system & firmware packages.
-
-4. Run `make` to build your firmware. This will download all sources, build the
-   cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen
-   applications for your target system.
-
-### Related Repositories
-
-The main repository uses multiple sub-repositories to manage packages of
-different categories. All packages are installed via the OpenWrt package
-manager called `opkg`. If you're looking to develop the web interface or port
-packages to OpenWrt, please find the fitting repository below.
-
-* [LuCI Web Interface](https://github.com/openwrt/luci): Modern and modular
-  interface to control the device via a web browser.
-
-* [OpenWrt Packages](https://github.com/openwrt/packages): Community repository
-  of ported packages.
-
-* [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically
-  focused on (mesh) routing.
-
-## Support Information
-
-For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
-
-### Documentation
-
-* [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
-* [User Guide](https://openwrt.org/docs/guide-user/start)
-* [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
-* [Technical Reference](https://openwrt.org/docs/techref/start)
-
-### Support Community
-
-* [Forum](https://forum.openwrt.org): For usage, projects, discussions and hardware advise.
-* [Support Chat](https://webchat.oftc.net/#openwrt): Channel `#openwrt` on **oftc.net**.
-
-### Developer Community
-
-* [Bug Reports](https://bugs.openwrt.org): Report bugs in OpenWrt
-* [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
-* [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
+Special thanks to MartB who provided device tree [patch for kernel 4.14](https://gist.github.com/MartB/99e30df35cb41af7f8f9130cb41c6ddd).
 
 ## License
 
-OpenWrt is licensed under GPL-2.0
+OpenWrt is licensed under GPL-2.0 and so is this.
