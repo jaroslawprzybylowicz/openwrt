@@ -1,0 +1,59 @@
+From 681f13fb6e624f9529321a69ebe1f302117bd31f Mon Sep 17 00:00:00 2001
+From: Jaroslaw Przybylowicz <jaroslaw.przybylowicz@gmail.com>
+Date: Fri, 7 Jan 2022 12:52:43 +0100
+Subject: [PATCH] OCTEON: Fix compilation issues with SAA instructions
+
+OCTEON series 5xxx and up support SAA instructions, yet this fails to be
+optimized out during compilation for 3xxx series. Since there is a
+kernel config flag driving this, remove runtime check.
+---
+ arch/mips/include/asm/octeon/cvmx-atomic.h | 12 ++----------
+ 1 file changed, 2 insertions(+), 10 deletions(-)
+
+diff --git a/arch/mips/include/asm/octeon/cvmx-atomic.h b/arch/mips/include/asm/octeon/cvmx-atomic.h
+index 2282eb5db359..406cfc4ac669 100644
+--- a/arch/mips/include/asm/octeon/cvmx-atomic.h
++++ b/arch/mips/include/asm/octeon/cvmx-atomic.h
+@@ -79,7 +79,7 @@ static inline void cvmx_atomic_add32_nosync(int32_t * ptr, int32_t incr)
+ 				     :"memory");
+ 	}
+ #else
+-	if (OCTEON_IS_MODEL(OCTEON_CN3XXX)) {
++	{
+ 		uint32_t tmp;
+ 
+ 		__asm__ __volatile__(".set push         \n"
+@@ -90,10 +90,6 @@ static inline void cvmx_atomic_add32_nosync(int32_t * ptr, int32_t incr)
+ 				     "   beqz %[tmp], 1b     \n" "   nop                 \n" ".set pop           \n":[val] "+m"(*ptr),[tmp] "=&r"(tmp)
+ 				     :[inc] "r"(incr)
+ 				     :"memory");
+-	} else {
+-		__asm__ __volatile__("   saa %[inc], (%[base]) \n":"+m"(*ptr)
+-				     :[inc] "r"(incr),[base] "r"(ptr)
+-				     :"memory");
+ 	}
+ #endif
+ }
+@@ -160,7 +156,7 @@ static inline void cvmx_atomic_add64_nosync(int64_t * ptr, int64_t incr)
+ 				     :"memory");
+ 	}
+ #else
+-	if (OCTEON_IS_MODEL(OCTEON_CN3XXX)) {
++	{
+ 		uint64_t tmp;
+ 		__asm__ __volatile__(".set push         \n"
+ 				     ".set noreorder         \n"
+@@ -170,10 +166,6 @@ static inline void cvmx_atomic_add64_nosync(int64_t * ptr, int64_t incr)
+ 				     "   beqz %[tmp], 1b     \n" "   nop                 \n" ".set pop           \n":[val] "+m"(*ptr),[tmp] "=&r"(tmp)
+ 				     :[inc] "r"(incr)
+ 				     :"memory");
+-	} else {
+-		__asm__ __volatile__("   saad %[inc], (%[base])  \n":"+m"(*ptr)
+-				     :[inc] "r"(incr),[base] "r"(ptr)
+-				     :"memory");
+ 	}
+ #endif
+ }
+-- 
+2.25.1
+
